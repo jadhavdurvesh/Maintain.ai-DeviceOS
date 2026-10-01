@@ -1,0 +1,139 @@
+name: Release Maintain.ai DeviceOS (Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-sign-release:
+    name: Build and sign Windows installer
+    runs-on: windows-2025
+    env:
+      SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      SIGNPATH_SIGNING_POLICY_SLUG: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify signing configuration
+        shell: pwsh
+        run: |
+          $required = @(
+            'SIGNPATH_ORGANIZATION_ID',
+            'SIGNPATH_PROJECT_SLUG',
+            'SIGNPATH_SIGNING_POLICY_SLUG'
+          )
+          $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+          if ($missing.Count -gt 0) {
+            Write-Error "Windows release signing is not configured. Add the SignPath organization/project/policy variables and SIGNPATH_API_TOKEN secret before publishing a Windows release."
+          }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Generate Tauri bundle icons
+        run: npx tauri icon src-tauri/icons/icon.svg --output src-tauri/icons
+
+      # Build the native executable first. Tauri 2.12+ supports signing the
+      # executable before bundling and --no-binary-patching preserves that
+      # Authenticode signature during the later NSIS bundling step.
+      - name: Build unsigned Windows executable
+        run: npm exec tauri build -- --no-bundle
+
+      - name: Upload unsigned DeviceOS executable
+        id: upload-app
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-windows-app-unsigned
+          path: src-tauri/target/release/maintain-ai-deviceos.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Sign DeviceOS executable with SignPath
+        id: sign-app
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-app.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-app
+          parameters: |
+            version: "${{ github.ref_name }}"
+
+      - name: Replace executable with signed copy
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem -Path signed-app -Filter '*.exe' -Recurse -File | Select-Object -First 1
+          if (-not $signed) { throw 'SignPath returned no signed Windows executable.' }
+          Copy-Item $signed.FullName 'src-tauri/target/release/maintain-ai-deviceos.exe' -Force
+          $sig = Get-AuthenticodeSignature 'src-tauri/target/release/maintain-ai-deviceos.exe'
+          if ($sig.Status -ne 'Valid') { throw "Signed executable verification failed: $($sig.Status)" }
+          Write-Host "Signed DeviceOS executable verified: $($sig.SignerCertificate.Subject)"
+
+      - name: Bundle signed executable as NSIS installer
+        run: npm exec tauri bundle -- --bundles nsis --no-binary-patching
+
+      - name: Upload unsigned installer to SignPath
+        id: upload-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-windows-installer-unsigned
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Sign Windows NSIS installer with SignPath
+        id: sign-installer
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ env.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ env.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-installer
+          parameters: |
+            version: "${{ github.ref_name }}"
+
+      - name: Verify signed installer
+        shell: pwsh
+        run: |
+          $signed = Get-ChildItem -Path signed-installer -Filter '*.exe' -Recurse -File | Select-Object -First 1
+          if (-not $signed) { throw 'SignPath returned no signed Windows installer.' }
+          $sig = Get-AuthenticodeSignature $signed.FullName
+          if ($sig.Status -ne 'Valid') { throw "Signed installer verification failed: $($sig.Status)" }
+          Write-Host "Signed installer verified: $($sig.SignerCertificate.Subject)"
+
+      - name: Upload signed Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-windows-signed
+          path: signed-installer/*.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
