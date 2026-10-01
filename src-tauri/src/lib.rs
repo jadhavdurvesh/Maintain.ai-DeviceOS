@@ -1,4 +1,5 @@
 mod arduino_toolchain;
+mod arduino_upload;
 mod config_engine;
 mod config_store;
 mod db;
@@ -69,6 +70,10 @@ pub fn initialize_database(path:String)->Result<(),String>{db::open_database(&pa
 pub fn arduino_cli_status()->arduino_toolchain::ToolchainStatus{arduino_toolchain::status()}
 #[tauri::command]
 pub fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&config)}
+#[tauri::command]
+pub fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect()}
+#[tauri::command]
+pub fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{arduino_upload::upload(port,fqbn,build_dir)}
 
 #[cfg_attr(mobile,tauri::mobile_entry_point)]
-pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_gateway_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database,arduino_cli_status,compile_gateway_firmware]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
+pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_gateway_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database,arduino_cli_status,compile_gateway_firmware,detect_arduino_boards,upload_gateway_firmware]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
