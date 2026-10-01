@@ -31,7 +31,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -48,7 +49,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Build frontend
         run: npm run build
@@ -58,11 +59,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: deviceos-v__VERSION__
-          releaseName: Maintain.ai DeviceOS v__VERSION__
-          releaseBody: Automated desktop builds for Maintain.ai DeviceOS.
-          releaseDraft: true
-          prerelease: true
+          projectPath: .
           includeDebug: false
           includeRelease: true
-          projectPath: .
+
+      - name: Upload packaged installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14
