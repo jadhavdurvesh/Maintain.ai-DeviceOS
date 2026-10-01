@@ -1,0 +1,21 @@
+{
+  "name": "maintain-ai-deviceos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Maintain.ai DeviceOS desktop hardware provisioning and edge configuration application",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vitest": "latest"
+  }
+}
