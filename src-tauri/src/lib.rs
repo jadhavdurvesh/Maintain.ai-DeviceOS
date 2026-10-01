@@ -5,6 +5,7 @@ mod firmware;
 mod firmware_generator;
 mod machine_registry;
 mod registry;
+mod sensor_drivers;
 mod wiring;
 
 use serde::Serialize;
@@ -39,9 +40,7 @@ pub fn list_machine_signals() -> Vec<registry::MachineSignalDefinition> { regist
 pub fn list_machine_types() -> Vec<machine_registry::MachineTypeDefinition> { machine_registry::machine_types() }
 
 #[tauri::command]
-pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> config_engine::CompatibilityResult {
-    config_engine::validate_configuration(&request)
-}
+pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> config_engine::CompatibilityResult { config_engine::validate_configuration(&request) }
 
 #[tauri::command]
 pub fn save_configuration(path: String, config: config_store::DeviceConfiguration) -> Result<String, String> {
@@ -62,24 +61,19 @@ pub fn delete_configuration(path: String, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn generate_wiring(config: config_store::DeviceConfiguration) -> Result<wiring::WiringSpecification, String> {
-    wiring::generate_wiring(&config)
-}
+pub fn generate_wiring(config: config_store::DeviceConfiguration) -> Result<wiring::WiringSpecification, String> { wiring::generate_wiring(&config) }
 
 #[tauri::command]
-pub fn build_firmware_spec(config: config_store::DeviceConfiguration) -> Result<firmware::FirmwareBuildSpecification, String> {
-    firmware::build_specification(&config)
-}
+pub fn build_firmware_spec(config: config_store::DeviceConfiguration) -> Result<firmware::FirmwareBuildSpecification, String> { firmware::build_specification(&config) }
 
 #[tauri::command]
-pub fn generate_firmware(config: config_store::DeviceConfiguration) -> Result<firmware_generator::GeneratedFirmware, String> {
-    firmware_generator::generate(&config)
-}
+pub fn generate_firmware(config: config_store::DeviceConfiguration) -> Result<firmware_generator::GeneratedFirmware, String> { firmware_generator::generate(&config) }
 
 #[tauri::command]
-pub fn initialize_database(path: String) -> Result<(), String> {
-    db::open_database(&path).map(|_| ()).map_err(|e| e.to_string())
-}
+pub fn plan_sensor_drivers(config: config_store::DeviceConfiguration) -> Result<sensor_drivers::DriverPlan, String> { sensor_drivers::plan(&config) }
+
+#[tauri::command]
+pub fn initialize_database(path: String) -> Result<(), String> { db::open_database(&path).map(|_| ()).map_err(|e| e.to_string()) }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -98,6 +92,7 @@ pub fn run() {
             generate_wiring,
             build_firmware_spec,
             generate_firmware,
+            plan_sensor_drivers,
             initialize_database
         ])
         .run(tauri::generate_context!())
