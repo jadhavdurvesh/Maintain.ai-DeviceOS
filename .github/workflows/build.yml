@@ -43,7 +43,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
             librsvg2-dev \
             libudev-dev \
             libayatana-appindicator3-dev \
@@ -66,13 +65,11 @@ jobs:
         run: npm run build
 
       - name: Generate Tauri bundle icons
-        run: npx tauri icon src-tauri/icons/icon.svg --output src-tauri/icons
+        run: npm exec tauri icon src-tauri/icons/icon.svg -- --output src-tauri/icons
 
       - name: Build and package Tauri application
         run: npm exec tauri build -- --bundles "${{ matrix.bundles }}"
 
-      # Windows installers are uploaded first so SignPath can sign the exact
-      # GitHub Actions artifact produced by this trusted build.
       - name: Upload unsigned Windows installer
         if: matrix.platform == 'windows'
         id: upload-unsigned-windows
@@ -83,8 +80,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      # Signing is enabled as soon as the SignPath organization variable is
-      # configured. Until then the CI build remains usable for development.
       - name: Sign Windows installer with SignPath
         if: matrix.platform == 'windows' && vars.SIGNPATH_ORGANIZATION_ID != ''
         id: sign-windows
@@ -107,12 +102,7 @@ jobs:
           if (-not $installer) {
             throw 'SignPath did not return a signed Windows installer.'
           }
-
           $signature = Get-AuthenticodeSignature -FilePath $installer.FullName
-          Write-Host "Installer: $($installer.FullName)"
-          Write-Host "Signature status: $($signature.Status)"
-          Write-Host "Signer: $($signature.SignerCertificate.Subject)"
-
           if ($signature.Status -ne 'Valid') {
             throw "Windows Authenticode signature is not valid: $($signature.Status)"
           }
