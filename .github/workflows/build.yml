@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -32,7 +32,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -49,19 +48,19 @@ jobs:
           workspaces: src-tauri
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install
 
-      - name: Build web frontend
+      - name: Build frontend
         run: npm run build
 
-      - name: Build Tauri application
+      - name: Build and package Tauri application
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: deviceos-v__VERSION__
           releaseName: Maintain.ai DeviceOS v__VERSION__
-          releaseBody: Automated DeviceOS desktop builds.
+          releaseBody: Automated desktop builds for Maintain.ai DeviceOS.
           releaseDraft: true
           prerelease: true
           includeDebug: false
