@@ -33,15 +33,22 @@ pub fn validate_configuration(request: &ConfigurationRequest) -> CompatibilityRe
         for parameter in &selected_parameters { if !machine_signals.contains(parameter.signal_type) { warnings.push(format!("{} is not a declared signal for machine type {}", parameter.name, machine.name)); } }
         let digital_needed = sensor.required_digital_pins as usize;
         let analog_needed = sensor.required_analog_pins as usize;
-        if board.digital_pins.iter().filter(|p| !used_digital.contains(*p)).count() < digital_needed { errors.push(format!("Not enough free digital pins for {}", sensor.name)); }
-        if board.analog_pins.iter().filter(|p| !used_analog.contains(*p)).count() < analog_needed { errors.push(format!("Not enough free analog pins for {}", sensor.name)); }
-        let mut digital_iter = board.digital_pins.iter().filter(|p| !used_digital.contains(*p));
-        let mut analog_iter = board.analog_pins.iter().filter(|p| !used_analog.contains(*p));
+        if board.digital_pins.iter().filter(|p| !used_digital.contains(p)).count() < digital_needed { errors.push(format!("Not enough free digital pins for {}", sensor.name)); }
+        if board.analog_pins.iter().filter(|p| !used_analog.contains(p)).count() < analog_needed { errors.push(format!("Not enough free analog pins for {}", sensor.name)); }
+
         for parameter in selected_parameters {
             if parameter.signal_type == "analog" {
-                if let Some(pin) = analog_iter.next() { used_analog.insert(*pin); assignments.push(PinAssignment { sensor_id:sensor.id.to_string(), parameter_id:parameter.id.to_string(), pin:*pin, pin_type:"analog".into() }); }
-            } else if let Some(pin) = digital_iter.next() {
-                used_digital.insert(*pin); assignments.push(PinAssignment { sensor_id:sensor.id.to_string(), parameter_id:parameter.id.to_string(), pin:*pin, pin_type:"digital".into() });
+                let pin = board.analog_pins.iter().copied().find(|pin| !used_analog.contains(pin));
+                if let Some(pin) = pin {
+                    used_analog.insert(pin);
+                    assignments.push(PinAssignment { sensor_id:sensor.id.to_string(), parameter_id:parameter.id.to_string(), pin, pin_type:"analog".into() });
+                }
+            } else {
+                let pin = board.digital_pins.iter().copied().find(|pin| !used_digital.contains(pin));
+                if let Some(pin) = pin {
+                    used_digital.insert(pin);
+                    assignments.push(PinAssignment { sensor_id:sensor.id.to_string(), parameter_id:parameter.id.to_string(), pin, pin_type:"digital".into() });
+                }
             }
         }
     }
