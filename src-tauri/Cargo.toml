@@ -1,0 +1,26 @@
+[package]
+name = "maintain-ai-deviceos"
+version = "0.1.0"
+description = "Maintain.ai DeviceOS native hardware layer"
+authors = ["Maintain.ai"]
+edition = "2021"
+
+[lib]
+name = "maintain_ai_deviceos_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serialport = "4"
+rusqlite = { version = "0.32", features = ["bundled"] }
+thiserror = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
