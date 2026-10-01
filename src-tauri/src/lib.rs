@@ -1,4 +1,5 @@
 mod config_engine;
+mod config_store;
 mod db;
 mod machine_registry;
 mod registry;
@@ -16,18 +17,13 @@ pub struct HealthStatus {
 
 #[tauri::command]
 pub fn health() -> HealthStatus {
-    let timestamp_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or_default();
+    let timestamp_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or_default();
     HealthStatus { native_layer: "ready", serial_support: true, sqlite_support: true, timestamp_ms }
 }
 
 #[tauri::command]
 pub fn list_serial_ports() -> Result<Vec<String>, String> {
-    serialport::available_ports()
-        .map(|ports| ports.into_iter().map(|port| port.port_name).collect())
-        .map_err(|error| error.to_string())
+    serialport::available_ports().map(|ports| ports.into_iter().map(|port| port.port_name).collect()).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -48,8 +44,26 @@ pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> c
 }
 
 #[tauri::command]
+pub fn save_configuration(path: String, config: config_store::DeviceConfiguration) -> Result<String, String> {
+    let connection = db::open_database(&path).map_err(|e| e.to_string())?;
+    config_store::save_configuration(&connection, &config).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn load_configuration(path: String, id: String) -> Result<config_store::DeviceConfiguration, String> {
+    let connection = db::open_database(&path).map_err(|e| e.to_string())?;
+    config_store::load_configuration(&connection, &id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_configuration(path: String, id: String) -> Result<(), String> {
+    let connection = db::open_database(&path).map_err(|e| e.to_string())?;
+    config_store::delete_configuration(&connection, &id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn initialize_database(path: String) -> Result<(), String> {
-    db::open_database(&path).map(|_| ()).map_err(|error| error.to_string())
+    db::open_database(&path).map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -63,6 +77,9 @@ pub fn run() {
             list_machine_signals,
             list_machine_types,
             validate_configuration,
+            save_configuration,
+            load_configuration,
+            delete_configuration,
             initialize_database
         ])
         .run(tauri::generate_context!())
