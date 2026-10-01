@@ -3,6 +3,7 @@ mod config_store;
 mod db;
 mod firmware;
 mod firmware_generator;
+mod gateway_firmware;
 mod machine_registry;
 mod registry;
 mod runtime;
@@ -49,6 +50,8 @@ pub fn build_firmware_spec(config:config_store::DeviceConfiguration)->Result<fir
 #[tauri::command]
 pub fn generate_firmware(config:config_store::DeviceConfiguration)->Result<firmware_generator::GeneratedFirmware,String>{firmware_generator::generate(&config)}
 #[tauri::command]
+pub fn generate_gateway_firmware(config:config_store::DeviceConfiguration)->Result<gateway_firmware::GatewayFirmware,String>{gateway_firmware::generate(&config)}
+#[tauri::command]
 pub fn generate_runtime_firmware(config:config_store::DeviceConfiguration)->Result<runtime_firmware::RuntimeFirmware,String>{runtime_firmware::generate(&config)}
 #[tauri::command]
 pub fn plan_sensor_drivers(config:config_store::DeviceConfiguration)->Result<sensor_drivers::DriverPlan,String>{sensor_drivers::plan(&config)}
@@ -64,4 +67,4 @@ pub fn bridge_runtime_frame(config:config_store::DeviceConfiguration,frame:runti
 pub fn initialize_database(path:String)->Result<(),String>{db::open_database(&path).map(|_|()).map_err(|e|e.to_string())}
 
 #[cfg_attr(mobile,tauri::mobile_entry_point)]
-pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
+pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_gateway_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
