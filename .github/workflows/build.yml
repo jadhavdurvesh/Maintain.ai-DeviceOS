@@ -53,6 +53,9 @@ jobs:
       - name: Build frontend
         run: npm run build
 
+      - name: Generate Tauri bundle icons
+        run: npx tauri icon src-tauri/icons/icon.svg --output src-tauri/icons
+
       - name: Build and package Tauri application
         uses: tauri-apps/tauri-action@v0
         env:
