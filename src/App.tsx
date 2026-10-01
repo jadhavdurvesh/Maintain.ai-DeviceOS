@@ -1,63 +1,78 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import './styles.css';
 
-const steps = ['Connect', 'Board', 'Machine', 'Sensors', 'Pins', 'Wiring', 'Firmware', 'Upload', 'Test'];
+type Board = { id:string; name:string; fqbn:string; digital_pins:number[]; analog_pins:number[]; buses:string[] };
+type Parameter = { id:string; name:string; signal_type:string; unit:string; data_type:string; min:number|null; max:number|null };
+type Sensor = { id:string; name:string; category:string; protocol:string; parameters:Parameter[]; required_digital_pins:number; required_analog_pins:number; buses:string[] };
+type Machine = { id:string; name:string; category:string; signal_ids:string[]; components:{id:string;name:string;signal_ids:string[]}[] };
+type Selection = { sensor_id:string; parameter_ids:string[] };
+
+const steps = ['Welcome','Machine','Board','Sensors','Review','Wiring','Ready'];
+const icons: Record<string,string> = { temperature:'°', humidity:'%', vibration:'≈', current:'A', voltage:'V', pressure:'P', flow:'↝', speed:'S', load:'L', rpm:'R', distance:'↔', analog:'⌁', digital:'●' };
 
 function App() {
-  const [active, setActive] = useState('Dashboard');
-  const [step, setStep] = useState(0);
+  const [step,setStep]=useState(0);
+  const [boards,setBoards]=useState<Board[]>([]);
+  const [sensors,setSensors]=useState<Sensor[]>([]);
+  const [machines,setMachines]=useState<Machine[]>([]);
+  const [board,setBoard]=useState('arduino-uno-r3');
+  const [machine,setMachine]=useState('induction-motor');
+  const [selected,setSelected]=useState<Selection[]>([]);
+  const [connected,setConnected]=useState(false);
+  const [notice,setNotice]=useState('');
+  const [wiring,setWiring]=useState<any>(null);
 
-  const next = () => setStep((current) => Math.min(current + 1, steps.length - 1));
+  useEffect(()=>{
+    Promise.all([invoke<Board[]>('list_boards'),invoke<Sensor[]>('list_sensors'),invoke<Machine[]>('list_machine_types')]).then(([b,s,m])=>{setBoards(b);setSensors(s);setMachines(m)}).catch(()=>setNotice('DeviceOS is running in preview mode. Connect the native app to load hardware data.'));
+  },[]);
 
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">M</div>
-          <div><strong>Maintain.ai</strong><span>DeviceOS</span></div>
-        </div>
-        <nav>
-          {['Dashboard', 'Devices', 'Machines', 'Boards', 'Sensors', 'Projects', 'Firmware', 'Logs', 'Settings'].map((item) => (
-            <button className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)} key={item}>
-              <span className="nav-dot" />{item}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-footer">
-          <span className="status-dot" /> Local-first mode
-          <small>DeviceOS 0.1.0</small>
-        </div>
-      </aside>
+  const currentMachine = machines.find(x=>x.id===machine);
+  const chosenSensors = selected.map(x=>({...x,sensor:sensors.find(s=>s.id===x.sensor_id)})).filter(x=>x.sensor);
+  const signalCount = useMemo(()=>new Set(chosenSensors.flatMap(x=>x.parameter_ids)).size,[chosenSensors]);
 
-      <main className="main">
-        <header className="topbar">
-          <div><p className="eyebrow">HARDWARE PROVISIONING</p><h1>{active}</h1></div>
-          <div className="connection"><span className="status-dot" /> No device connected</div>
-        </header>
+  const toggleSensor=(sensor:Sensor)=>setSelected(prev=>prev.some(x=>x.sensor_id===sensor.id)?prev.filter(x=>x.sensor_id!==sensor.id):[...prev,{sensor_id:sensor.id,parameter_ids:sensor.parameters.map(p=>p.id)}]);
+  const toggleParameter=(sensorId:string,paramId:string)=>setSelected(prev=>prev.map(x=>x.sensor_id===sensorId?{...x,parameter_ids:x.parameter_ids.includes(paramId)?x.parameter_ids.filter(p=>p!==paramId):[...x.parameter_ids,paramId]}:x));
 
-        <section className="hero-card">
-          <div>
-            <p className="eyebrow">DEVICE SETUP</p>
-            <h2>Connect a device and start configuring.</h2>
-            <p className="muted">Provision boards, map sensors, generate tested firmware and verify live telemetry without leaving the desktop.</p>
-            <button className="primary" onClick={() => setActive('Devices')}>Connect device</button>
-          </div>
-          <div className="hero-orbit"><div className="orbit-core">USB</div><span className="orbit-node node-a">BOARD</span><span className="orbit-node node-b">SENSOR</span><span className="orbit-node node-c">DATA</span></div>
-        </section>
+  const connect=async()=>{try{const ports=await invoke<string[]>('list_serial_ports');setConnected(ports.length>0);setNotice(ports.length?`Found ${ports.length} device${ports.length>1?'s':''} over USB.`:'No USB device found. You can continue and connect later.')}catch{setNotice('No USB device found. You can continue and connect later.')}};
 
-        <section className="grid three">
-          <article className="metric"><span>Connected devices</span><strong>0</strong><small>Ready to provision</small></article>
-          <article className="metric"><span>Saved projects</span><strong>0</strong><small>Stored locally</small></article>
-          <article className="metric"><span>Firmware builds</span><strong>0</strong><small>No build history yet</small></article>
-        </section>
+  const makeConfig=()=>({id:'draft-device-config',device_id:null,machine_type_id:machine,board_id:board,sensors:selected,schema_version:'1.0',definition_version:'1.0',assignments:[]});
+  const review=async()=>{try{const result:any=await invoke('validate_configuration',{request:{machine_type_id:machine,board_id:board,sensors:selected}});setNotice(result.valid?'Everything looks compatible.':'A few things need attention before setup can continue.');if(result.assignments)setWiring({connections:result.assignments});}catch{setNotice('Compatibility preview is available after the native app connects.')}};
+  const next=async()=>{if(step===0)await connect();if(step===3)await review();setStep(s=>Math.min(steps.length-1,s+1));};
 
-        <section className="setup-card">
-          <div className="section-heading"><div><p className="eyebrow">PROVISIONING WORKFLOW</p><h3>{steps[step]}</h3></div><span>{step + 1} / {steps.length}</span></div>
-          <div className="steps">{steps.map((item, index) => <button key={item} onClick={() => setStep(index)} className={index === step ? 'step current' : index < step ? 'step done' : 'step'}><i>{index + 1}</i><span>{item}</span></button>)}</div>
-          <div className="workflow-panel"><div><h4>{steps[step]}</h4><p className="muted">{step === 0 ? 'Connect an Arduino Uno or Nano over USB. DeviceOS will enumerate the serial port and identify the board when possible.' : 'This stage is ready for the next DeviceOS provisioning service.'}</p></div><button className="secondary" onClick={next}>{step === steps.length - 1 ? 'Complete' : 'Continue'}</button></div>
-        </section>
-      </main>
-    </div>
-  );
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <div className="brand"><div className="brand-mark">M</div><div><strong>Maintain.ai</strong><span>DeviceOS</span></div></div>
+      <div className="side-title">SETUP</div>
+      <div className="side-steps">{steps.map((s,i)=><button key={s} onClick={()=>i<=step&&setStep(i)} className={i===step?'side-step active':i<step?'side-step done':'side-step'}><span>{i<step?'✓':i+1}</span>{s}</button>)}</div>
+      <div className="sidebar-footer"><span className={connected?'status-dot live':'status-dot'} /> {connected?'Device connected':'Waiting for device'}<small>DeviceOS 0.1.0</small></div>
+    </aside>
+
+    <main className="main">
+      <header className="topbar"><div><p className="eyebrow">MAINTAIN.AI DEVICEOS</p><h1>Set up your machine</h1></div><div className={connected?'connection live':'connection'}><span className="status-dot" />{connected?'USB device connected':'No device connected'}</div></header>
+
+      <div className="progress"><div style={{width:`${(step/(steps.length-1))*100}%`}} /></div>
+
+      {step===0&&<section className="welcome hero-card"><div className="hero-copy"><div className="badge">● SIMPLE SETUP</div><h2>Build a machine monitor without writing code.</h2><p className="muted">Choose your machine, pick the sensors you have, and DeviceOS handles compatibility, pins, wiring and firmware for you.</p><button className="primary big" onClick={next}>Start setup <span>→</span></button><div className="trust"><span>✓ No coding</span><span>✓ Visual wiring</span><span>✓ Guided checks</span></div></div><div className="visual-machine"><div className="machine-ring"><div className="machine-core">⚙</div><div className="bubble b1">🌡 Temperature</div><div className="bubble b2">〽 Vibration</div><div className="bubble b3">A Current</div><div className="bubble b4">R RPM</div></div></div></section>}
+
+      {step===1&&<Wizard title="What are you monitoring?" subtitle="Pick the machine. DeviceOS will automatically suggest the signals that matter for it."><div className="card-grid machines">{machines.map(m=><button key={m.id} onClick={()=>setMachine(m.id)} className={machine===m.id?'choice-card selected':'choice-card'}><div className="choice-icon">{m.category==='power'?'⚡':m.category==='fluid'?'◉':m.category==='machine-tool'?'✦':m.category==='air'?'◌':'⚙'}</div><div><strong>{m.name}</strong><small>{m.components.length} components · {m.signal_ids.length} signals</small></div><span className="radio">{machine===m.id?'✓':''}</span></button>)}</div>{currentMachine&&<div className="suggestion"><strong>DeviceOS will watch</strong><div className="chips">{currentMachine.signal_ids.map(s=><span key={s}>{icons[s]||'•'} {s}</span>)}</div></div>}</Wizard>}
+
+      {step===2&&<Wizard title="Which controller are you using?" subtitle="Choose the small board you are going to plug into the machine. You don't need to know its technical model number."><div className="card-grid boards">{boards.map(b=><button key={b.id} onClick={()=>setBoard(b.id)} className={board===b.id?'board-card selected':'board-card'}><div className="board-visual"><div className="board-chip">MCU</div><div className="pins" /></div><div className="board-info"><strong>{b.name}</strong><small>USB controller · {b.digital_pins.length} digital · {b.analog_pins.length} analog</small></div><span className="radio">{board===b.id?'✓':''}</span></button>)}</div><div className="help-box">💡 <span>Not sure which board you have? Start with <b>Arduino Uno R3</b> if your controller is the common full-size Arduino board.</span></div></Wizard>}
+
+      {step===3&&<Wizard title="What sensors do you have?" subtitle="Tap a sensor to add it. You can choose exactly what each sensor should measure."><div className="sensor-grid">{sensors.map(s=>{const active=selected.some(x=>x.sensor_id===s.id);return <div key={s.id} className={active?'sensor-card selected':'sensor-card'}><button className="sensor-main" onClick={()=>toggleSensor(s)}><div className="sensor-icon">{s.category==='environmental'?'🌡':s.category==='electrical'?'⚡':s.category==='vibration'?'〽':s.category==='motion'?'◉':s.category==='pressure'?'◌':s.category==='flow'?'↝':'◈'}</div><div><strong>{s.name}</strong><small>{s.parameters.map(p=>p.name).join(' · ')}</small></div><span className="check">{active?'✓':'+'}</span></button>{active&&<div className="parameter-list">{s.parameters.map(p=><label key={p.id}><input type="checkbox" checked={selected.find(x=>x.sensor_id===s.id)?.parameter_ids.includes(p.id)??false} onChange={()=>toggleParameter(s.id,p.id)}/><span>{icons[p.signal_type]||'•'}</span>{p.name}<em>{p.unit}</em></label>)}</div>}</div>})}</div><div className="selection-bar"><span><b>{selected.length}</b> sensors · <b>{signalCount}</b> measurements</span><span>{selected.length?'Ready for compatibility check':'Select at least one sensor'}</span></div></Wizard>}
+
+      {step===4&&<Wizard title="Everything looks like this" subtitle="Review the setup in plain language. DeviceOS will do the technical checks in the background."><div className="review-layout"><div className="review-machine"><div className="machine-illustration">⚙</div><strong>{currentMachine?.name}</strong><small>{boards.find(b=>b.id===board)?.name}</small></div><div className="review-list">{chosenSensors.map(x=><div className="review-row" key={x.sensor_id}><span className="sensor-icon small">{x.sensor?.category==='environmental'?'🌡':'◈'}</span><div><strong>{x.sensor?.name}</strong><small>{x.parameter_ids.map(p=>x.sensor?.parameters.find(pp=>pp.id===p)?.name).filter(Boolean).join(' · ')}</small></div><span className="ok">✓ Ready</span></div>)}</div></div>{notice&&<div className="notice">{notice}</div>}</Wizard>}
+
+      {step===5&&<Wizard title="Your wiring plan is ready" subtitle="Follow the picture, not a wiring manual. Each sensor gets a clear connection point."><div className="wiring-board"><div className="board-drawing"><div className="board-label">{boards.find(b=>b.id===board)?.name||'Controller'}</div><div className="board-usb">USB</div><div className="board-pins">{Array.from({length:14},(_,i)=><span key={i}>D{i}</span>)}</div><div className="board-analog">{Array.from({length:6},(_,i)=><span key={i}>A{i}</span>)}</div></div><div className="wire-list">{chosenSensors.map((x,i)=><div className="wire-row" key={x.sensor_id}><span className="wire-number">{i+1}</span><div><strong>{x.sensor?.name}</strong><small>{x.parameter_ids.map(p=>x.sensor?.parameters.find(pp=>pp.id===p)?.name).join(' · ')}</small></div><span className="wire-target">Auto assigned</span></div>)}</div></div><div className="help-box">🔒 <span>DeviceOS checks for pin conflicts before you build. You don't need to calculate pins yourself.</span></div></Wizard>}
+
+      {step===6&&<Wizard title="You're ready to build" subtitle="DeviceOS has your machine, sensors and wiring plan. The next action creates the firmware for this exact setup."><div className="ready-card"><div className="ready-icon">✓</div><h3>Setup complete</h3><p>{currentMachine?.name} · {selected.length} sensors · {signalCount} measurements</p><div className="ready-actions"><button className="primary big" onClick={()=>setNotice('Firmware generation is ready in the native DeviceOS runtime.')}>Build device firmware <span>→</span></button><button className="secondary" onClick={()=>setStep(0)}>Start another setup</button></div></div></Wizard>}
+
+      <footer className="wizard-footer"><button className="back" disabled={step===0} onClick={()=>setStep(s=>Math.max(0,s-1))}>← Back</button>{step>0&&step<6&&<button className="primary" onClick={next}>{step===3?'Check my setup →':step===5?'Finish setup →':'Continue →'}</button>}</footer>
+      {notice&&step!==4&&<div className="toast">{notice}</div>}
+    </main>
+  </div>
 }
+
+function Wizard({title,subtitle,children}:{title:string;subtitle:string;children:React.ReactNode}){return <section className="wizard"><div className="wizard-heading"><div><p className="eyebrow">STEP BY STEP</p><h2>{title}</h2><p className="muted">{subtitle}</p></div></div>{children}</section>}
 
 export default App;
