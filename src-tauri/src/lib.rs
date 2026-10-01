@@ -1,4 +1,5 @@
 mod db;
+mod machine_registry;
 mod registry;
 
 use serde::Serialize;
@@ -18,13 +19,7 @@ pub fn health() -> HealthStatus {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis())
         .unwrap_or_default();
-
-    HealthStatus {
-        native_layer: "ready",
-        serial_support: true,
-        sqlite_support: true,
-        timestamp_ms,
-    }
+    HealthStatus { native_layer: "ready", serial_support: true, sqlite_support: true, timestamp_ms }
 }
 
 #[tauri::command]
@@ -35,20 +30,20 @@ pub fn list_serial_ports() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn list_boards() -> Vec<registry::BoardDefinition> {
-    registry::boards()
-}
+pub fn list_boards() -> Vec<registry::BoardDefinition> { registry::boards() }
 
 #[tauri::command]
-pub fn list_sensors() -> Vec<registry::SensorDefinition> {
-    registry::sensors()
-}
+pub fn list_sensors() -> Vec<registry::SensorDefinition> { registry::sensors() }
+
+#[tauri::command]
+pub fn list_machine_signals() -> Vec<registry::MachineSignalDefinition> { registry::machine_signals() }
+
+#[tauri::command]
+pub fn list_machine_types() -> Vec<machine_registry::MachineTypeDefinition> { machine_registry::machine_types() }
 
 #[tauri::command]
 pub fn initialize_database(path: String) -> Result<(), String> {
-    db::open_database(&path)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+    db::open_database(&path).map(|_| ()).map_err(|error| error.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -59,6 +54,8 @@ pub fn run() {
             list_serial_ports,
             list_boards,
             list_sensors,
+            list_machine_signals,
+            list_machine_types,
             initialize_database
         ])
         .run(tauri::generate_context!())
