@@ -1,8 +1,10 @@
 mod config_engine;
 mod config_store;
 mod db;
+mod firmware;
 mod machine_registry;
 mod registry;
+mod wiring;
 
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -28,13 +30,10 @@ pub fn list_serial_ports() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub fn list_boards() -> Vec<registry::BoardDefinition> { registry::boards() }
-
 #[tauri::command]
 pub fn list_sensors() -> Vec<registry::SensorDefinition> { registry::sensors() }
-
 #[tauri::command]
 pub fn list_machine_signals() -> Vec<registry::MachineSignalDefinition> { registry::machine_signals() }
-
 #[tauri::command]
 pub fn list_machine_types() -> Vec<machine_registry::MachineTypeDefinition> { machine_registry::machine_types() }
 
@@ -62,6 +61,16 @@ pub fn delete_configuration(path: String, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn generate_wiring(config: config_store::DeviceConfiguration) -> Result<wiring::WiringSpecification, String> {
+    wiring::generate_wiring(&config)
+}
+
+#[tauri::command]
+pub fn build_firmware_spec(config: config_store::DeviceConfiguration) -> Result<firmware::FirmwareBuildSpecification, String> {
+    firmware::build_specification(&config)
+}
+
+#[tauri::command]
 pub fn initialize_database(path: String) -> Result<(), String> {
     db::open_database(&path).map(|_| ()).map_err(|e| e.to_string())
 }
@@ -80,6 +89,8 @@ pub fn run() {
             save_configuration,
             load_configuration,
             delete_configuration,
+            generate_wiring,
+            build_firmware_spec,
             initialize_database
         ])
         .run(tauri::generate_context!())
