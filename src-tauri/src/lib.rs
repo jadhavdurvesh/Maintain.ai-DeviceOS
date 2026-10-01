@@ -3,6 +3,7 @@ mod arduino_upload;
 mod config_engine;
 mod config_store;
 mod db;
+mod device_verification;
 mod firmware;
 mod firmware_generator;
 mod gateway_firmware;
@@ -74,6 +75,8 @@ pub fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Resul
 pub fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect()}
 #[tauri::command]
 pub fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{arduino_upload::upload(port,fqbn,build_dir)}
+#[tauri::command]
+pub fn verify_uploaded_device(config:config_store::DeviceConfiguration,port:String,baud_rate:u32,timeout_ms:u64)->Result<device_verification::VerificationResult,String>{device_verification::verify(&config,port,baud_rate,timeout_ms)}
 
 #[cfg_attr(mobile,tauri::mobile_entry_point)]
-pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_gateway_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database,arduino_cli_status,compile_gateway_firmware,detect_arduino_boards,upload_gateway_firmware]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
+pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_gateway_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database,arduino_cli_status,compile_gateway_firmware,detect_arduino_boards,upload_gateway_firmware,verify_uploaded_device]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
