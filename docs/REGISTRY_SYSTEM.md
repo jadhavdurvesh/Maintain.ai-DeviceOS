@@ -16,28 +16,33 @@ Each board definition declares:
 - UART
 - I2C
 - SPI
+- supported buses
 - voltage
 - reserved pins
 - upload capabilities
 
-Initial board definitions:
-- arduino-uno-r3
-- arduino-nano
+Initial boards:
+- Arduino Uno R3
+- Arduino Nano
 
-Planned:
-- arduino-mega-2560
-- esp32-devkit
-- esp32-wroom
-- esp8266-nodemcu
+Planned boards:
+- Arduino Mega 2560
+- ESP32 DevKit
+- ESP32 WROOM
+- ESP8266 NodeMCU
 
 ## Sensor Registry
+
+A sensor is a physical instrument, not a machine signal.
 
 Each sensor definition declares:
 - id
 - name
+- category
 - protocol
-- parameters
-- pin capabilities
+- parameters[]
+- pin requirements
+- supported buses
 - power range
 - library requirements
 - compatible boards
@@ -46,25 +51,66 @@ Each sensor definition declares:
 - calibration support
 - diagnostic metadata
 
-Initial:
-- dht11
-- sw420
-- generic-analog-input
-- generic-digital-input
+A sensor may expose multiple parameters. For example, DHT11 exposes temperature and humidity.
 
-Planned:
-- dht22
-- ds18b20
-- bmp280
-- bme280
-- mpu6050
-- hc-sr04
-- acs712
+## Parameter Registry
+
+Every parameter declares:
+- id
+- name
+- signal_type
+- unit
+- data_type
+- optional min/max
+- calibration metadata
+- sampling metadata
+
+Parameters represent what the physical sensor can measure.
+
+## Machine Signal Registry
+
+Machine signals represent semantic values used by Maintain.ai machine profiles. Initial vocabulary:
+- temperature
+- humidity
+- vibration
+- current
+- voltage
+- pressure
+- flow
+- speed
+- load
+- RPM
+- distance
+
+A machine signal can have multiple possible physical sensor sources.
+
+## Mapping
+
+Configuration stores an explicit mapping:
+
+```text
+sensor instance → parameter → machine signal
+```
+
+DeviceOS must never assume that one sensor type uniquely defines a machine signal.
+
+## Physical sensor expansion
+
+The registry is designed to grow beyond the current implementation. Planned examples include:
+- DHT22
+- DS18B20
+- BMP280
+- BME280
+- MPU6050
+- HC-SR04
+- ACS712
 - LDR
 - industrial accelerometers
-- 4-20mA
-- Modbus/RS485
+- 4-20mA sensors
+- Modbus/RS485 instruments
+
+These are registry entries, not the definition of the entire Maintain.ai signal model.
 
 ## Versioning
 
-Use schema_version and definition_version. Changes to compatibility, pin maps, libraries or safety metadata require a definition version bump and regression coverage.
+Use schema_version and definition_version. Changes to compatibility, parameters, pin maps, libraries, wiring or safety metadata require a definition version bump and regression coverage.
