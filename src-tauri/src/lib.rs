@@ -5,7 +5,9 @@ mod firmware;
 mod firmware_generator;
 mod machine_registry;
 mod registry;
+mod runtime;
 mod sensor_drivers;
+mod telemetry;
 mod wiring;
 
 use serde::Serialize;
@@ -62,15 +64,14 @@ pub fn delete_configuration(path: String, id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn generate_wiring(config: config_store::DeviceConfiguration) -> Result<wiring::WiringSpecification, String> { wiring::generate_wiring(&config) }
-
 #[tauri::command]
 pub fn build_firmware_spec(config: config_store::DeviceConfiguration) -> Result<firmware::FirmwareBuildSpecification, String> { firmware::build_specification(&config) }
-
 #[tauri::command]
 pub fn generate_firmware(config: config_store::DeviceConfiguration) -> Result<firmware_generator::GeneratedFirmware, String> { firmware_generator::generate(&config) }
-
 #[tauri::command]
 pub fn plan_sensor_drivers(config: config_store::DeviceConfiguration) -> Result<sensor_drivers::DriverPlan, String> { sensor_drivers::plan(&config) }
+#[tauri::command]
+pub fn encode_telemetry(envelope: telemetry::TelemetryEnvelope) -> Result<String, String> { telemetry::encode_json(&envelope) }
 
 #[tauri::command]
 pub fn initialize_database(path: String) -> Result<(), String> { db::open_database(&path).map(|_| ()).map_err(|e| e.to_string()) }
@@ -93,6 +94,7 @@ pub fn run() {
             build_firmware_spec,
             generate_firmware,
             plan_sensor_drivers,
+            encode_telemetry,
             initialize_database
         ])
         .run(tauri::generate_context!())
