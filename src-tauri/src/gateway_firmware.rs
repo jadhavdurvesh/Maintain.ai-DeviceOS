@@ -2,6 +2,8 @@ use crate::config_store::DeviceConfiguration;
 use crate::registry::sensors;
 use crate::runtime_firmware::RuntimeFirmware;
 
+pub type GatewayFirmware = RuntimeFirmware;
+
 fn identifier(value: &str) -> String {
     let mut out = String::new();
     for c in value.chars() {
@@ -12,7 +14,7 @@ fn identifier(value: &str) -> String {
 
 fn escape(value: &str) -> String { value.replace('\\', "\\\\").replace('"', "\\\"") }
 
-pub fn generate(config: &DeviceConfiguration) -> Result<RuntimeFirmware, String> {
+pub fn generate(config: &DeviceConfiguration) -> Result<GatewayFirmware, String> {
     let board = crate::registry::boards().into_iter().find(|b| b.id == config.board_id)
         .ok_or_else(|| format!("Unknown board: {}", config.board_id))?;
 
@@ -29,7 +31,7 @@ pub fn generate(config: &DeviceConfiguration) -> Result<RuntimeFirmware, String>
         let pin = if assignment.pin_type == "analog" { format!("A{}", assignment.pin.saturating_sub(14)) } else { assignment.pin.to_string() };
         declarations.push_str(&format!("const uint8_t PIN_{} = {};\n", key, pin));
         setup.push_str(&format!("  pinMode(PIN_{}, INPUT);\n", key));
-        let read_expr = if assignment.pin_type == "analog" { format!("analogRead(PIN_{})") } else { format!("digitalRead(PIN_{})") };
+        let read_expr = if assignment.pin_type == "analog" { format!("analogRead(PIN_{})", key) } else { format!("digitalRead(PIN_{})", key) };
         readings.push_str(&format!("  emitReading(\"{}\", \"{}\", (double)({}), \"{}\");\n", escape(sensor.id), escape(parameter.id), read_expr, escape(parameter.unit)));
     }
 
