@@ -8,6 +8,13 @@ export type ParameterDefinition = {
   max?: number;
 };
 
+export type PhysicalPinDefinition = {
+  id: string;
+  label: string;
+  role: 'power' | 'ground' | 'signal';
+  signal_type?: string;
+};
+
 export type BoardDefinition = {
   id: string;
   name: string;
@@ -26,6 +33,7 @@ export type SensorDefinition = {
   required_digital_pins: number;
   required_analog_pins: number;
   buses: string[];
+  physical_pins: PhysicalPinDefinition[];
 };
 
 export type MachineSignalDefinition = {
@@ -36,6 +44,9 @@ export type MachineSignalDefinition = {
 };
 
 const parameter = (id: string, name: string, signal_type: string, unit: string, data_type: ParameterDefinition['data_type'], min?: number, max?: number): ParameterDefinition => ({ id, name, signal_type, unit, data_type, min, max });
+const power = (id='vcc', label='VCC'): PhysicalPinDefinition => ({ id, label, role: 'power' });
+const ground = (id='gnd', label='GND'): PhysicalPinDefinition => ({ id, label, role: 'ground' });
+const signal = (id: string, label: string, signal_type='digital'): PhysicalPinDefinition => ({ id, label, role: 'signal', signal_type });
 
 export const initialBoards: BoardDefinition[] = [
   { id: 'arduino-uno-r3', name: 'Arduino Uno R3', fqbn: 'arduino:avr:uno', digital_pins: Array.from({ length: 14 }, (_, i) => i), analog_pins: [14,15,16,17,18,19], buses: ['uart','i2c','spi','gpio','analog'] },
@@ -43,18 +54,18 @@ export const initialBoards: BoardDefinition[] = [
 ];
 
 export const initialSensors: SensorDefinition[] = [
-  { id: 'dht11', name: 'DHT11', category: 'environmental', protocol: 'single-wire', parameters: [parameter('temperature','Temperature','temperature','°C','float'), parameter('humidity','Humidity','humidity','%','float',0,100)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'] },
-  { id: 'sw420', name: 'SW-420 Vibration', category: 'vibration', protocol: 'digital', parameters: [parameter('vibration','Vibration','vibration','state','boolean')], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'] },
-  { id: 'current-sensor', name: 'Current Sensor', category: 'electrical', protocol: 'analog', parameters: [parameter('current','Current','current','A','float',0)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'] },
-  { id: 'voltage-sensor', name: 'Voltage Sensor', category: 'electrical', protocol: 'analog', parameters: [parameter('voltage','Voltage','voltage','V','float',0)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'] },
-  { id: 'pressure-sensor', name: 'Pressure Sensor', category: 'pressure', protocol: 'analog', parameters: [parameter('pressure','Pressure','pressure','bar','float',0)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'] },
-  { id: 'flow-sensor', name: 'Flow Sensor', category: 'flow', protocol: 'pulse', parameters: [parameter('flow','Flow','flow','L/min','float',0)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'] },
-  { id: 'speed-sensor', name: 'Speed Sensor', category: 'motion', protocol: 'pulse', parameters: [parameter('speed','Speed','speed','m/s','float',0)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'] },
-  { id: 'rpm-sensor', name: 'RPM Sensor', category: 'motion', protocol: 'pulse', parameters: [parameter('rpm','RPM','rpm','rpm','float',0)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'] },
-  { id: 'load-sensor', name: 'Load Sensor', category: 'mechanical', protocol: 'analog', parameters: [parameter('load','Load','load','%','float',0,100)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'] },
-  { id: 'distance-sensor', name: 'Distance Sensor', category: 'position', protocol: 'digital', parameters: [parameter('distance','Distance','distance','mm','float',0)], required_digital_pins: 2, required_analog_pins: 0, buses: ['gpio'] },
-  { id: 'generic-analog-input', name: 'Generic Analog Input', category: 'generic', protocol: 'analog', parameters: [parameter('analog','Analog','analog','raw','integer',0,1023)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'] },
-  { id: 'generic-digital-input', name: 'Generic Digital Input', category: 'generic', protocol: 'digital', parameters: [parameter('digital','Digital','digital','state','boolean')], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'] },
+  { id: 'dht11', name: 'DHT11', category: 'environmental', protocol: 'single-wire', parameters: [parameter('temperature','Temperature','temperature','°C','float'), parameter('humidity','Humidity','humidity','%','float',0,100)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('data','DATA','digital')] },
+  { id: 'sw420', name: 'SW-420 Vibration', category: 'vibration', protocol: 'digital', parameters: [parameter('vibration','Vibration','vibration','state','boolean')], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('do','DO','digital')] },
+  { id: 'current-sensor', name: 'Current Sensor', category: 'electrical', protocol: 'analog', parameters: [parameter('current','Current','current','A','float',0)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'], physical_pins: [power(), ground(), signal('out','OUT','analog')] },
+  { id: 'voltage-sensor', name: 'Voltage Sensor', category: 'electrical', protocol: 'analog', parameters: [parameter('voltage','Voltage','voltage','V','float',0)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'], physical_pins: [power(), ground(), signal('out','OUT','analog')] },
+  { id: 'pressure-sensor', name: 'Pressure Sensor', category: 'pressure', protocol: 'analog', parameters: [parameter('pressure','Pressure','pressure','bar','float',0)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'], physical_pins: [power(), ground(), signal('out','OUT','analog')] },
+  { id: 'flow-sensor', name: 'Flow Sensor', category: 'flow', protocol: 'pulse', parameters: [parameter('flow','Flow','flow','L/min','float',0)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('pulse','PULSE','digital')] },
+  { id: 'speed-sensor', name: 'Speed Sensor', category: 'motion', protocol: 'pulse', parameters: [parameter('speed','Speed','speed','m/s','float',0)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('pulse','PULSE','digital')] },
+  { id: 'rpm-sensor', name: 'RPM Sensor', category: 'motion', protocol: 'pulse', parameters: [parameter('rpm','RPM','rpm','rpm','float',0)], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('pulse','PULSE','digital')] },
+  { id: 'load-sensor', name: 'Load Sensor', category: 'mechanical', protocol: 'analog', parameters: [parameter('load','Load','load','%','float',0,100)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'], physical_pins: [power(), ground(), signal('out','OUT','analog')] },
+  { id: 'distance-sensor', name: 'Distance Sensor', category: 'position', protocol: 'digital', parameters: [parameter('distance','Distance','distance','mm','float',0)], required_digital_pins: 2, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('trig','TRIG','digital'), signal('echo','ECHO','digital')] },
+  { id: 'generic-analog-input', name: 'Generic Analog Input', category: 'generic', protocol: 'analog', parameters: [parameter('analog','Analog','analog','raw','integer',0,1023)], required_digital_pins: 0, required_analog_pins: 1, buses: ['analog'], physical_pins: [power(), ground(), signal('in','IN','analog')] },
+  { id: 'generic-digital-input', name: 'Generic Digital Input', category: 'generic', protocol: 'digital', parameters: [parameter('digital','Digital','digital','state','boolean')], required_digital_pins: 1, required_analog_pins: 0, buses: ['gpio'], physical_pins: [power(), ground(), signal('in','IN','digital')] },
 ];
 
 export const machineSignals: MachineSignalDefinition[] = [
