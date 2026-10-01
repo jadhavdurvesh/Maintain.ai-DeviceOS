@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -16,7 +17,7 @@ jobs:
       matrix:
         include:
           - platform: windows
-            runner: windows-latest
+            runner: windows-2025
             bundles: nsis
           - platform: macos
             runner: macos-latest
@@ -67,7 +68,108 @@ jobs:
       - name: Generate Tauri bundle icons
         run: npx tauri icon src-tauri/icons/icon.svg --output src-tauri/icons
 
-      - name: Build and package Tauri application
+      # Windows is deliberately split into compile -> sign -> bundle.
+      # This prevents the NSIS bundle step from embedding an unsigned app
+      # and then producing an unsigned installer. Azure Artifact Signing is
+      # Microsoft's current recommended production signing path.
+      - name: Build Windows application without bundling
+        if: runner.os == 'Windows'
+        run: npm exec tauri build -- --no-bundle
+
+      - name: Validate Windows signing configuration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_NAME: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          AZURE_CERT_PROFILE_NAME: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+        run: |
+          $required = @(
+            'AZURE_TENANT_ID',
+            'AZURE_CLIENT_ID',
+            'AZURE_SUBSCRIPTION_ID',
+            'AZURE_ARTIFACT_SIGNING_ENDPOINT',
+            'AZURE_CODE_SIGNING_NAME',
+            'AZURE_CERT_PROFILE_NAME'
+          )
+          $missing = $required | Where-Object { [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_)) }
+          if ($missing.Count -gt 0) {
+            Write-Error "Windows release signing is not configured. Missing GitHub Actions secrets: $($missing -join ', '). Configure Microsoft Azure Artifact Signing before distributing DeviceOS."
+          }
+
+      - name: Azure login for Artifact Signing
+        if: runner.os == 'Windows'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign Windows application binaries
+        if: runner.os == 'Windows'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\src-tauri\target\release
+          files-folder-filter: exe,dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          timeout: 600
+
+      - name: Verify Windows application signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path 'src-tauri/target/release' -Recurse -File | Where-Object { $_.Extension -in '.exe', '.dll' }
+          if (-not $files) { throw 'No Windows executable or DLL files were produced.' }
+          foreach ($file in $files) {
+            $sig = Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($sig.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature: $($file.FullName) -> $($sig.Status)"
+            }
+          }
+          Write-Host "All Windows application binaries have valid Authenticode signatures."
+
+      - name: Bundle signed Windows application
+        if: runner.os == 'Windows'
+        run: npm exec tauri bundle -- --bundles "${{ matrix.bundles }}" --no-binary-patching
+
+      - name: Sign Windows installer
+        if: runner.os == 'Windows'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_CODE_SIGNING_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\src-tauri\target\release\bundle\nsis
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          timeout: 600
+
+      - name: Verify Windows installer signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path 'src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File
+          if (-not $files) { throw 'No Windows NSIS installer was produced.' }
+          foreach ($file in $files) {
+            $sig = Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($sig.Status -ne 'Valid') {
+              throw "Invalid Authenticode signature: $($file.FullName) -> $($sig.Status)"
+            }
+          }
+          Write-Host "All Windows installers have valid Authenticode signatures."
+
+      - name: Build and package non-Windows Tauri application
+        if: runner.os != 'Windows'
         run: npm exec tauri build -- --bundles "${{ matrix.bundles }}"
 
       - name: Upload packaged installers
