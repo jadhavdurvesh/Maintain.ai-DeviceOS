@@ -7,6 +7,7 @@ mod machine_registry;
 mod registry;
 mod runtime;
 mod sensor_drivers;
+mod serial_runtime;
 mod telemetry;
 mod wiring;
 
@@ -14,24 +15,15 @@ use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize)]
-pub struct HealthStatus {
-    pub native_layer: &'static str,
-    pub serial_support: bool,
-    pub sqlite_support: bool,
-    pub timestamp_ms: u128,
-}
+pub struct HealthStatus { pub native_layer: &'static str, pub serial_support: bool, pub sqlite_support: bool, pub timestamp_ms: u128 }
 
 #[tauri::command]
 pub fn health() -> HealthStatus {
     let timestamp_ms = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or_default();
     HealthStatus { native_layer: "ready", serial_support: true, sqlite_support: true, timestamp_ms }
 }
-
 #[tauri::command]
-pub fn list_serial_ports() -> Result<Vec<String>, String> {
-    serialport::available_ports().map(|ports| ports.into_iter().map(|port| port.port_name).collect()).map_err(|e| e.to_string())
-}
-
+pub fn list_serial_ports() -> Result<Vec<String>, String> { serial_runtime::list_ports().map(|p| p.into_iter().map(|x| x.port_name).collect()) }
 #[tauri::command]
 pub fn list_boards() -> Vec<registry::BoardDefinition> { registry::boards() }
 #[tauri::command]
@@ -40,28 +32,14 @@ pub fn list_sensors() -> Vec<registry::SensorDefinition> { registry::sensors() }
 pub fn list_machine_signals() -> Vec<registry::MachineSignalDefinition> { registry::machine_signals() }
 #[tauri::command]
 pub fn list_machine_types() -> Vec<machine_registry::MachineTypeDefinition> { machine_registry::machine_types() }
-
 #[tauri::command]
 pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> config_engine::CompatibilityResult { config_engine::validate_configuration(&request) }
-
 #[tauri::command]
-pub fn save_configuration(path: String, config: config_store::DeviceConfiguration) -> Result<String, String> {
-    let connection = db::open_database(&path).map_err(|e| e.to_string())?;
-    config_store::save_configuration(&connection, &config).map_err(|e| e.to_string())
-}
-
+pub fn save_configuration(path: String, config: config_store::DeviceConfiguration) -> Result<String, String> { let c=db::open_database(&path).map_err(|e|e.to_string())?; config_store::save_configuration(&c,&config).map_err(|e|e.to_string()) }
 #[tauri::command]
-pub fn load_configuration(path: String, id: String) -> Result<config_store::DeviceConfiguration, String> {
-    let connection = db::open_database(&path).map_err(|e| e.to_string())?;
-    config_store::load_configuration(&connection, &id).map_err(|e| e.to_string())
-}
-
+pub fn load_configuration(path: String, id: String) -> Result<config_store::DeviceConfiguration, String> { let c=db::open_database(&path).map_err(|e|e.to_string())?; config_store::load_configuration(&c,&id).map_err(|e|e.to_string()) }
 #[tauri::command]
-pub fn delete_configuration(path: String, id: String) -> Result<(), String> {
-    let connection = db::open_database(&path).map_err(|e| e.to_string())?;
-    config_store::delete_configuration(&connection, &id).map_err(|e| e.to_string())
-}
-
+pub fn delete_configuration(path: String, id: String) -> Result<(), String> { let c=db::open_database(&path).map_err(|e|e.to_string())?; config_store::delete_configuration(&c,&id).map_err(|e|e.to_string()) }
 #[tauri::command]
 pub fn generate_wiring(config: config_store::DeviceConfiguration) -> Result<wiring::WiringSpecification, String> { wiring::generate_wiring(&config) }
 #[tauri::command]
@@ -72,31 +50,10 @@ pub fn generate_firmware(config: config_store::DeviceConfiguration) -> Result<fi
 pub fn plan_sensor_drivers(config: config_store::DeviceConfiguration) -> Result<sensor_drivers::DriverPlan, String> { sensor_drivers::plan(&config) }
 #[tauri::command]
 pub fn encode_telemetry(envelope: telemetry::TelemetryEnvelope) -> Result<String, String> { telemetry::encode_json(&envelope) }
-
 #[tauri::command]
-pub fn initialize_database(path: String) -> Result<(), String> { db::open_database(&path).map(|_| ()).map_err(|e| e.to_string()) }
+pub fn open_serial(config: serial_runtime::SerialRuntimeConfig) -> Result<String, String> { let _=serial_runtime::open(&config)?; Ok("connected".into()) }
+#[tauri::command]
+pub fn initialize_database(path: String) -> Result<(), String> { db::open_database(&path).map(|_|()).map_err(|e|e.to_string()) }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            health,
-            list_serial_ports,
-            list_boards,
-            list_sensors,
-            list_machine_signals,
-            list_machine_types,
-            validate_configuration,
-            save_configuration,
-            load_configuration,
-            delete_configuration,
-            generate_wiring,
-            build_firmware_spec,
-            generate_firmware,
-            plan_sensor_drivers,
-            encode_telemetry,
-            initialize_database
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running Maintain.ai DeviceOS");
-}
+pub fn run() { tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,plan_sensor_drivers,encode_telemetry,open_serial,initialize_database]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS"); }
