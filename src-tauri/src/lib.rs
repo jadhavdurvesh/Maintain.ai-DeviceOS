@@ -2,6 +2,7 @@ mod config_engine;
 mod config_store;
 mod db;
 mod firmware;
+mod firmware_generator;
 mod machine_registry;
 mod registry;
 mod wiring;
@@ -71,6 +72,11 @@ pub fn build_firmware_spec(config: config_store::DeviceConfiguration) -> Result<
 }
 
 #[tauri::command]
+pub fn generate_firmware(config: config_store::DeviceConfiguration) -> Result<firmware_generator::GeneratedFirmware, String> {
+    firmware_generator::generate(&config)
+}
+
+#[tauri::command]
 pub fn initialize_database(path: String) -> Result<(), String> {
     db::open_database(&path).map(|_| ()).map_err(|e| e.to_string())
 }
@@ -91,6 +97,7 @@ pub fn run() {
             delete_configuration,
             generate_wiring,
             build_firmware_spec,
+            generate_firmware,
             initialize_database
         ])
         .run(tauri::generate_context!())
