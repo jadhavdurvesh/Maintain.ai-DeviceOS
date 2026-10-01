@@ -4,13 +4,15 @@
   "version": "0.1.0",
   "identifier": "ai.maintain.deviceos",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run dev -- --port 1420",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:1420",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Maintain.ai DeviceOS",
         "width": 1440,
         "height": 920,
