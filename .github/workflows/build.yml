@@ -17,10 +17,13 @@ jobs:
         include:
           - platform: windows
             runner: windows-latest
+            bundles: nsis
           - platform: macos
             runner: macos-latest
+            bundles: dmg
           - platform: linux
             runner: ubuntu-22.04
+            bundles: deb,appimage
 
     runs-on: ${{ matrix.runner }}
 
@@ -44,7 +47,8 @@ jobs:
             libudev-dev \
             libayatana-appindicator3-dev \
             patchelf \
-            libssl-dev
+            libssl-dev \
+            libfuse2
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -64,13 +68,7 @@ jobs:
         run: npx tauri icon src-tauri/icons/icon.svg --output src-tauri/icons
 
       - name: Build and package Tauri application
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: .
-          includeDebug: false
-          includeRelease: true
+        run: npm exec tauri build -- --bundles "${{ matrix.bundles }}"
 
       - name: Upload packaged installers
         uses: actions/upload-artifact@v4
