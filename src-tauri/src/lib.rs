@@ -15,6 +15,7 @@ mod wiring;
 
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::Manager;
 
 #[derive(Debug, Serialize)]
 pub struct HealthStatus { pub native_layer: &'static str, pub serial_support: bool, pub sqlite_support: bool, pub timestamp_ms: u128 }
@@ -35,6 +36,8 @@ pub fn list_machine_types() -> Vec<machine_registry::MachineTypeDefinition> { ma
 pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> config_engine::CompatibilityResult { config_engine::validate_configuration(&request) }
 #[tauri::command]
 pub fn save_configuration(path:String,config:config_store::DeviceConfiguration)->Result<String,String>{let c=db::open_database(&path).map_err(|e|e.to_string())?;config_store::save_configuration(&c,&config).map_err(|e|e.to_string())}
+#[tauri::command]
+pub fn save_active_configuration(app: tauri::AppHandle, config: config_store::DeviceConfiguration)->Result<String,String>{let dir=app.path().app_data_dir().map_err(|e|e.to_string())?;std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;let path=dir.join("deviceos.db");let c=db::open_database(path.to_str().ok_or_else(||"Invalid database path".to_string())?).map_err(|e|e.to_string())?;config_store::save_configuration(&c,&config).map_err(|e|e.to_string())}
 #[tauri::command]
 pub fn load_configuration(path:String,id:String)->Result<config_store::DeviceConfiguration,String>{let c=db::open_database(&path).map_err(|e|e.to_string())?;config_store::load_configuration(&c,&id).map_err(|e|e.to_string())}
 #[tauri::command]
@@ -61,4 +64,4 @@ pub fn bridge_runtime_frame(config:config_store::DeviceConfiguration,frame:runti
 pub fn initialize_database(path:String)->Result<(),String>{db::open_database(&path).map(|_|()).map_err(|e|e.to_string())}
 
 #[cfg_attr(mobile,tauri::mobile_entry_point)]
-pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
+pub fn run(){tauri::Builder::default().invoke_handler(tauri::generate_handler![health,list_serial_ports,list_boards,list_sensors,list_machine_signals,list_machine_types,validate_configuration,save_configuration,save_active_configuration,load_configuration,delete_configuration,generate_wiring,build_firmware_spec,generate_firmware,generate_runtime_firmware,plan_sensor_drivers,encode_telemetry,open_serial,validate_runtime_frame,bridge_runtime_frame,initialize_database]).run(tauri::generate_context!()).expect("error while running Maintain.ai DeviceOS");}
