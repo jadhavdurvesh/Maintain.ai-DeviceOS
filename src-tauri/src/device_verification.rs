@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serialport::SerialPort;
 use std::io::{BufRead, BufReader};
 use std::time::{Duration, Instant};
 use crate::config_store::DeviceConfiguration;
@@ -33,7 +32,7 @@ pub fn verify(config: &DeviceConfiguration, port: String, baud_rate: u32, timeou
                 let text = line.trim();
                 if text == "MAINTAIN_AI_SENSOR_NODE_READY" { ready_seen = true; continue; }
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(text) {
-                    if v.get("reading_type").and_then(|x| x.as_str()).is_some() && v.get("value").and_then(|x| x.as_f64()).is_some() {
+                    if v.get("reading_type").and_then(|x| x.as_str()) == Some("sensor") && v.get("value").and_then(|x| x.as_f64()).is_some() {
                         readings_seen += 1;
                         valid_readings += 1;
                     }
@@ -44,6 +43,20 @@ pub fn verify(config: &DeviceConfiguration, port: String, baud_rate: u32, timeou
             Err(e) => return Err(format!("Serial verification failed: {e}")),
         }
     }
-    let success = ready_seen && valid_readings > 0;
-    Ok(VerificationResult { success, port, ready_seen, readings_seen, expected_readings: expected, valid_readings, message: if success { "Arduino firmware is responding and producing valid telemetry. Device is ready for MAINTAIN-AI-IoT-Gateway.".into() } else if !ready_seen { "Arduino did not report the DeviceOS ready marker before the verification timeout.".into() } else { "Arduino started, but no valid sensor telemetry was received.".into() } })
+    let success = ready_seen && valid_readings >= expected;
+    Ok(VerificationResult {
+        success,
+        port,
+        ready_seen,
+        readings_seen,
+        expected_readings: expected,
+        valid_readings,
+        message: if success {
+            "Arduino firmware is responding and producing the expected telemetry. Device is ready for MAINTAIN-AI-IoT-Gateway.".into()
+        } else if !ready_seen {
+            "Arduino did not report the DeviceOS ready marker before the verification timeout.".into()
+        } else {
+            format!("Arduino started, but only {valid_readings} of {expected} expected sensor readings were received.")
+        },
+    })
 }
