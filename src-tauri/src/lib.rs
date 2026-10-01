@@ -1,3 +1,4 @@
+mod config_engine;
 mod db;
 mod machine_registry;
 mod registry;
@@ -42,6 +43,11 @@ pub fn list_machine_signals() -> Vec<registry::MachineSignalDefinition> { regist
 pub fn list_machine_types() -> Vec<machine_registry::MachineTypeDefinition> { machine_registry::machine_types() }
 
 #[tauri::command]
+pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> config_engine::CompatibilityResult {
+    config_engine::validate_configuration(&request)
+}
+
+#[tauri::command]
 pub fn initialize_database(path: String) -> Result<(), String> {
     db::open_database(&path).map(|_| ()).map_err(|error| error.to_string())
 }
@@ -56,6 +62,7 @@ pub fn run() {
             list_sensors,
             list_machine_signals,
             list_machine_types,
+            validate_configuration,
             initialize_database
         ])
         .run(tauri::generate_context!())
