@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::io::{BufRead, BufReader};
 use std::process::Command;
+use std::thread::sleep;
+use std::time::{Duration, Instant};
 use crate::arduino_toolchain;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,10 +31,51 @@ pub fn detect() -> Result<Vec<DetectedBoard>, String> {
     Ok(boards)
 }
 
+fn verify_after_upload(port: &str) -> Result<(), String> {
+    sleep(Duration::from_millis(1500));
+    let serial = serialport::new(port, 115200)
+        .timeout(Duration::from_millis(250))
+        .open()
+        .map_err(|e| format!("Firmware uploaded, but DeviceOS could not reconnect to the Arduino: {e}"))?;
+    let start = Instant::now();
+    let mut reader = BufReader::new(serial);
+    let mut line = String::new();
+    let mut ready_seen = false;
+    let mut telemetry_seen = false;
+    while start.elapsed() < Duration::from_secs(10) {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => continue,
+            Ok(_) => {
+                let text = line.trim();
+                if text == "MAINTAIN_AI_SENSOR_NODE_READY" { ready_seen = true; continue; }
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
+                    if value.get("reading_type").and_then(|v| v.as_str()).is_some()
+                        && value.get("value").and_then(|v| v.as_f64()).is_some() {
+                        telemetry_seen = true;
+                    }
+                }
+                if ready_seen && telemetry_seen { return Ok(()); }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
+            Err(e) => return Err(format!("Device verification failed while reading serial data: {e}")),
+        }
+    }
+    if !ready_seen { return Err("Firmware uploaded, but the Arduino did not report the DeviceOS ready marker within 10 seconds.".into()); }
+    if !telemetry_seen { return Err("Firmware uploaded and DeviceOS started, but no valid sensor telemetry was received within 10 seconds.".into()); }
+    Err("Device verification timed out.".into())
+}
+
 pub fn upload(port:String, fqbn:String, build_dir:String) -> Result<UploadResult,String> {
     let cli=cli()?;
     let out=Command::new(&cli).args(["upload","-p",port.as_str(),"--fqbn",fqbn.as_str(),"--input-dir",build_dir.as_str()]).output().map_err(|e|format!("Could not run Arduino CLI upload: {e}"))?;
     let stdout=String::from_utf8_lossy(&out.stdout).into();
     let stderr=String::from_utf8_lossy(&out.stderr).into();
-    Ok(UploadResult{success:out.status.success(),port,fqbn,stdout,stderr,message:if out.status.success(){"Firmware uploaded successfully. Reconnecting to verify the device.".into()}else{"Firmware upload failed. Review the compiler/upload output for details.".into()}})
+    if !out.status.success() {
+        return Ok(UploadResult{success:false,port,fqbn,stdout,stderr,message:"Firmware upload failed. Review the compiler/upload output for details.".into()});
+    }
+    match verify_after_upload(&port) {
+        Ok(()) => Ok(UploadResult{success:true,port,fqbn,stdout,stderr,message:"Firmware uploaded and verified. Arduino is ready for MAINTAIN-AI-IoT-Gateway.".into()}),
+        Err(message) => Ok(UploadResult{success:false,port,fqbn,stdout,stderr,message}),
+    }
 }
