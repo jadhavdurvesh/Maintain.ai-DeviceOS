@@ -1,3 +1,6 @@
+mod db;
+mod registry;
+
 use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -31,10 +34,33 @@ pub fn list_serial_ports() -> Result<Vec<String>, String> {
         .map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+pub fn list_boards() -> Vec<registry::BoardDefinition> {
+    registry::boards()
+}
+
+#[tauri::command]
+pub fn list_sensors() -> Vec<registry::SensorDefinition> {
+    registry::sensors()
+}
+
+#[tauri::command]
+pub fn initialize_database(path: String) -> Result<(), String> {
+    db::open_database(&path)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![health, list_serial_ports])
+        .invoke_handler(tauri::generate_handler![
+            health,
+            list_serial_ports,
+            list_boards,
+            list_sensors,
+            initialize_database
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Maintain.ai DeviceOS");
 }
