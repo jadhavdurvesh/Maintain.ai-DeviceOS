@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   build:
@@ -70,11 +71,73 @@ jobs:
       - name: Build and package Tauri application
         run: npm exec tauri build -- --bundles "${{ matrix.bundles }}"
 
-      - name: Upload packaged installers
+      # Windows installers must be code-signed before distribution. SignPath
+      # performs trusted signing using the configured project/certificate.
+      - name: Upload unsigned Windows installer
+        if: matrix.platform == 'windows'
+        id: upload-unsigned-windows
         uses: actions/upload-artifact@v4
         with:
-          name: maintain-ai-deviceos-${{ matrix.platform }}
-          path: |
-            src-tauri/target/release/bundle/**
+          name: maintain-ai-deviceos-windows-unsigned
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Sign Windows installer with SignPath
+        if: matrix.platform == 'windows'
+        id: sign-windows
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ secrets.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-windows
+          wait-for-completion-timeout-in-seconds: 900
+
+      - name: Verify signed Windows installer
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: |
+          $installer = Get-ChildItem -Path signed-windows -Filter *.exe -Recurse | Select-Object -First 1
+          if (-not $installer) {
+            throw 'SignPath did not return a signed Windows installer.'
+          }
+
+          $signature = Get-AuthenticodeSignature -FilePath $installer.FullName
+          Write-Host "Installer: $($installer.FullName)"
+          Write-Host "Signature status: $($signature.Status)"
+          Write-Host "Signer: $($signature.SignerCertificate.Subject)"
+
+          if ($signature.Status -ne 'Valid') {
+            throw "Windows Authenticode signature is not valid: $($signature.Status)"
+          }
+
+      - name: Upload signed Windows installer
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-windows
+          path: signed-windows/**/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload macOS installer
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-macos
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Linux installers
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintain-ai-deviceos-linux
+          path: src-tauri/target/release/bundle/**
           if-no-files-found: error
           retention-days: 14
