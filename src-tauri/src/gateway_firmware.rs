@@ -9,44 +9,160 @@ fn identifier(value: &str) -> String { value.chars().map(|c| if c.is_ascii_alpha
 fn escape(value: &str) -> String { value.replace('\\', "\\\\").replace('"', "\\\"") }
 
 pub fn generate(config: &DeviceConfiguration) -> Result<GatewayFirmware, String> {
-    let board = crate::registry::boards().into_iter().find(|b| b.id == config.board_id).ok_or_else(|| format!("Unknown board: {}", config.board_id))?;
-    let mut declarations=String::new(); let mut setup=String::new(); let mut readings=String::new(); let mut dht=HashSet::new();
-    for a in &config.assignments {
-        let sensor=sensors().into_iter().find(|s| s.id==a.sensor_id).ok_or_else(|| format!("Unknown sensor: {}",a.sensor_id))?;
-        let parameter=sensor.parameters.iter().find(|p| p.id==a.parameter_id).ok_or_else(|| format!("Unknown parameter: {}",a.parameter_id))?;
-        let key=identifier(&format!("{}_{}",a.sensor_id,a.parameter_id));
-        let pin=if a.pin_type=="analog" {format!("A{}",a.pin.saturating_sub(14))} else {a.pin.to_string()};
-        if sensor.id=="dht11" { if dht.insert(sensor.id) { declarations.push_str(&format!("const uint8_t PIN_DHT11_DATA = {};\nfloat dht11_temperature=NAN; float dht11_humidity=NAN;\n",pin)); } }
-        else { declarations.push_str(&format!("const uint8_t PIN_{} = {};\n",key,pin)); setup.push_str(&format!("  pinMode(PIN_{}, INPUT);\n",key)); let expr=if a.pin_type=="analog" {format!("analogRead(PIN_{})",key)} else {format!("digitalRead(PIN_{})",key)}; readings.push_str(&format!("  emitReading(\"{}\",\"{}\",(double)({}),\"{}\");\n",escape(sensor.id),escape(parameter.id),expr,escape(parameter.unit))); }
+    let board = crate::registry::boards().into_iter().find(|b| b.id == config.board_id)
+        .ok_or_else(|| format!("Unknown board: {}", config.board_id))?;
+
+    let mut declarations = String::new();
+    let mut setup = String::new();
+    let mut reading_objects = Vec::new();
+    let mut dht_sensors = HashSet::new();
+
+    for assignment in &config.assignments {
+        let sensor = sensors().into_iter().find(|s| s.id == assignment.sensor_id)
+            .ok_or_else(|| format!("Unknown sensor: {}", assignment.sensor_id))?;
+        let parameter = sensor.parameters.iter().find(|p| p.id == assignment.parameter_id)
+            .ok_or_else(|| format!("Unknown parameter: {}", assignment.parameter_id))?;
+        let key = identifier(&format!("{}_{}", assignment.sensor_id, assignment.parameter_id));
+        let pin = if assignment.pin_type == "analog" {
+            format!("A{}", assignment.pin.saturating_sub(14))
+        } else {
+            assignment.pin.to_string()
+        };
+
+        if sensor.id == "dht11" {
+            if dht_sensors.insert(sensor.id) {
+                declarations.push_str("const uint8_t PIN_DHT11_DATA = ");
+                declarations.push_str(&pin);
+                declarations.push_str(";\nfloat dht11_temperature=NAN; float dht11_humidity=NAN;\n");
+            }
+            continue;
+        }
+
+        declarations.push_str(&format!("const uint8_t PIN_{} = {};\n", key, pin));
+        setup.push_str(&format!("  pinMode(PIN_{}, INPUT);\n", key));
+        let expr = if assignment.pin_type == "analog" {
+            format!("analogRead(PIN_{})", key)
+        } else {
+            format!("digitalRead(PIN_{})", key)
+        };
+        reading_objects.push(format!(
+            "    emitReading(\"{}\", \"{}\", (double)({}), \"{}\");",
+            escape(sensor.id), escape(parameter.id), expr, escape(parameter.unit)
+        ));
     }
-    let dht_code=if dht.is_empty(){String::new()}else{r#"
+
+    let dht_code = if dht_sensors.is_empty() {
+        String::new()
+    } else {
+        r#"
 bool readDht11(uint8_t pin, float &temperature, float &humidity) {
   uint8_t data[5]={0,0,0,0,0};
-  pinMode(pin,OUTPUT); digitalWrite(pin,LOW); delay(18); digitalWrite(pin,HIGH); delayMicroseconds(30); pinMode(pin,INPUT_PULLUP);
+  pinMode(pin,OUTPUT); digitalWrite(pin,LOW); delay(18);
+  digitalWrite(pin,HIGH); delayMicroseconds(30); pinMode(pin,INPUT_PULLUP);
   uint32_t start=micros(); while(digitalRead(pin)==HIGH){if(micros()-start>100)return false;}
   start=micros(); while(digitalRead(pin)==LOW){if(micros()-start>100)return false;}
   start=micros(); while(digitalRead(pin)==HIGH){if(micros()-start>100)return false;}
-  for(uint8_t i=0;i<40;i++){ start=micros(); while(digitalRead(pin)==LOW){if(micros()-start>100)return false;} uint32_t highStart=micros(); while(digitalRead(pin)==HIGH){if(micros()-highStart>100)return false;} uint32_t highDuration=micros()-highStart; if(highDuration>40)data[i/8]|=(1<<(7-(i%8))); }
+  for(uint8_t i=0;i<40;i++){
+    start=micros(); while(digitalRead(pin)==LOW){if(micros()-start>100)return false;}
+    uint32_t highStart=micros();
+    while(digitalRead(pin)==HIGH){if(micros()-highStart>100)return false;}
+    uint32_t highDuration=micros()-highStart;
+    if(highDuration>40)data[i/8]|=(1<<(7-(i%8)));
+  }
   if((uint8_t)(data[0]+data[1]+data[2]+data[3])!=data[4])return false;
   humidity=data[0]+data[1]*0.1f; temperature=data[2]+data[3]*0.1f; return true;
 }
-"#.to_string()};
-    if !dht.is_empty(){ setup.push_str("  pinMode(PIN_DHT11_DATA, INPUT_PULLUP);\n"); readings.push_str("  if(readDht11(PIN_DHT11_DATA,dht11_temperature,dht11_humidity)){\n"); for a in &config.assignments { if a.sensor_id=="dht11" { let p=sensors().into_iter().find(|s|s.id=="dht11").and_then(|s|s.parameters.iter().find(|p|p.id==a.parameter_id)).ok_or_else(||"Unknown DHT11 parameter".to_string())?; let value=if a.parameter_id=="temperature"{"dht11_temperature"}else{"dht11_humidity"}; readings.push_str(&format!("    emitReading(\"dht11\",\"{}\",(double)({}),\"{}\");\n",escape(p.id),value,escape(p.unit))); }} readings.push_str("  }\n"); }
-    let device=match config.device_id.as_deref(){Some(id) if !id.is_empty()=>format!("\"{}\"",escape(id)),_=>"nullptr".into()};
-    let source=format!(r#"// Generated by Maintain.ai DeviceOS.
-// Gateway protocol: one JSON telemetry object per line.
+"#.to_string()
+    };
+
+    let mut dht_reads = Vec::new();
+    if !dht_sensors.is_empty() {
+        for assignment in &config.assignments {
+            if assignment.sensor_id == "dht11" {
+                let parameter = sensors().into_iter()
+                    .find(|s| s.id == "dht11")
+                    .and_then(|s| s.parameters.iter().find(|p| p.id == assignment.parameter_id))
+                    .ok_or_else(|| "Unknown DHT11 parameter".to_string())?;
+                let value = if assignment.parameter_id == "temperature" {
+                    "dht11_temperature"
+                } else {
+                    "dht11_humidity"
+                };
+                dht_reads.push(format!(
+                    "    emitReading(\"dht11\", \"{}\", (double)({}), \"{}\");",
+                    escape(parameter.id), value, escape(parameter.unit)
+                ));
+            }
+        }
+    }
+
+    let readings_body = if reading_objects.is_empty() && dht_reads.is_empty() {
+        String::new()
+    } else {
+        let mut lines = reading_objects;
+        lines.extend(dht_reads);
+        lines.join("\n")
+    };
+
+    let device = match config.device_id.as_deref() {
+        Some(id) if !id.is_empty() => format!("\"{}\"", escape(id)),
+        _ => "nullptr".into(),
+    };
+
+    let source = format!(r#"// Generated by Maintain.ai DeviceOS.
+// Gateway protocol: maintain-ai-telemetry v1.0; one envelope per line.
 #include <Arduino.h>
 #include <math.h>
-{decl}
-const char* DEVICE_ID={device}; uint64_t sequenceNumber=0;
-void emitReading(const char* sensorId,const char* parameterId,double value,const char* unit){{
- Serial.print("{{\"reading_type\":\"sensor\",\"protocol\":\"maintain-ai-telemetry\",\"protocol_version\":\"1.0\",\"device_id\":");
- if(DEVICE_ID==nullptr)Serial.print("null");else{{Serial.print("\"");Serial.print(DEVICE_ID);Serial.print("\"");}}
- Serial.print(",\"configuration_id\":\"{config}\",\"sequence\":");Serial.print(sequenceNumber++);Serial.print(",\"sensor_id\":\"");Serial.print(sensorId);Serial.print("\",\"parameter_id\":\"");Serial.print(parameterId);Serial.print("\",\"value\":");Serial.print(value,6);Serial.print(",\"unit\":\"");Serial.print(unit);Serial.print("\",\"timestamp_ms\":");Serial.print(millis());Serial.println("}}");
+
+{declarations}
+const char* DEVICE_ID={device};
+uint64_t sequenceNumber=0;
+uint8_t emittedReadings=0;
+
+void emitReading(const char* sensorId,const char* parameterId,double value,const char* unit) {{
+  if(emittedReadings>0) Serial.print(",");
+  Serial.print("{{\"sensor_id\":\"");
+  Serial.print(sensorId);
+  Serial.print("\",\"parameter_id\":\"");
+  Serial.print(parameterId);
+  Serial.print("\",\"value\":");
+  Serial.print(value,6);
+  Serial.print(",\"unit\":\"");
+  Serial.print(unit);
+  Serial.print("\",\"timestamp_ms\":");
+  Serial.print(millis());
+  Serial.print("}}");
+  emittedReadings++;
 }}
-{dht}
-void setup(){{Serial.begin(115200);{setup} delay(100);Serial.println("MAINTAIN_AI_SENSOR_NODE_READY");}}
-void loop(){{{readings} delay(1000);}}
-"#,decl=declarations,device=device,config=escape(&config.id),dht=dht_code,setup=setup,readings=readings);
-    Ok(RuntimeFirmware{configuration_id:config.id.clone(),file_name:format!("maintain_ai_gateway_{}.ino",config.id),fqbn:board.fqbn.to_string(),source})
+
+void emitFrame() {{
+  emittedReadings=0;
+  Serial.print("{{\"protocol\":\"maintain-ai-telemetry\",\"protocol_version\":\"1.0\",\"device_id\":");
+  if(DEVICE_ID==nullptr) Serial.print("null"); else {{Serial.print("\"");Serial.print(DEVICE_ID);Serial.print("\"");}}
+  Serial.print(",\"configuration_id\":\"{config}\",\"sequence\":");
+  Serial.print(sequenceNumber++);
+  Serial.print(",\"readings\":[");
+{readings_body}
+  Serial.println("]}}");
+}}
+
+{dht_code}
+void setup() {{
+  Serial.begin(115200);
+{setup}  delay(100);
+  Serial.println("MAINTAIN_AI_SENSOR_NODE_READY");
+}}
+
+void loop() {{
+  emitFrame();
+  delay(1000);
+}}
+"#, declarations=declarations, device=device, config=escape(&config.id), readings_body=readings_body, dht_code=dht_code, setup=setup);
+
+    Ok(RuntimeFirmware {
+        configuration_id: config.id.clone(),
+        file_name: format!("maintain_ai_gateway_{}.ino", config.id),
+        fqbn: board.fqbn.to_string(),
+        source,
+    })
 }
