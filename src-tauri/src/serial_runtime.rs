@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use serialport::{SerialPort, SerialPortInfo};
-use std::io::{Read, Write};
 use std::time::Duration;
 
 use crate::telemetry::{TelemetryEnvelope, TelemetryReading};
