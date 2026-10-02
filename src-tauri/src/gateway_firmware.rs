@@ -26,7 +26,7 @@ bool readDht11(uint8_t pin, float &temperature, float &humidity) {
   uint32_t start=micros(); while(digitalRead(pin)==HIGH){if(micros()-start>100)return false;}
   start=micros(); while(digitalRead(pin)==LOW){if(micros()-start>100)return false;}
   start=micros(); while(digitalRead(pin)==HIGH){if(micros()-start>100)return false;}
-  for(uint8_t i=0;i<40;i++){ start=micros(); while(digitalRead(pin)==LOW){if(micros()-start>100)return false;} uint32_t highStart=micros(); while(digitalRead(pin)==HIGH){if(micros()-highStart>100)return false;} if(micros()-highStart>40)data[i/8]|=(1<<(7-(i%8))); }
+  for(uint8_t i=0;i<40;i++){ start=micros(); while(digitalRead(pin)==LOW){if(micros()-start>100)return false;} uint32_t highStart=micros(); while(digitalRead(pin)==HIGH){if(micros()-highStart>100)return false;} uint32_t highDuration=micros()-highStart; if(highDuration>40)data[i/8]|=(1<<(7-(i%8))); }
   if((uint8_t)(data[0]+data[1]+data[2]+data[3])!=data[4])return false;
   humidity=data[0]+data[1]*0.1f; temperature=data[2]+data[3]*0.1f; return true;
 }
