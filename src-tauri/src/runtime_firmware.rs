@@ -56,9 +56,9 @@ void emitReading(const char* sensorId, const char* parameterId, double value, co
   Serial.print("{{\"sensor_id\":\""); Serial.print(sensorId);
   Serial.print("\",\"parameter_id\":\""); Serial.print(parameterId);
   Serial.print("\",\"value\":"); Serial.print(value, 6);
-  Serial.print(" ,\"unit\":\""); Serial.print(unit);
+  Serial.print(",\"unit\":\""); Serial.print(unit);
   Serial.print("\",\"timestamp_ms\":"); Serial.print(millis());
-  Serial.print("}}\n");
+  Serial.print("}}");
 }}
 
 void emitFrame() {{
