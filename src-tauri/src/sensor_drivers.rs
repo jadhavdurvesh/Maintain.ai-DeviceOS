@@ -30,13 +30,21 @@ pub struct DriverPlan {
 }
 
 fn driver_for(protocol: &str, sensor_id: &str) -> (&'static str, Option<&'static str>) {
-    match protocol {
-        "I2C" => ("i2c_generic", Some("Wire")),
-        "UART" => ("uart_generic", None),
-        "SPI" => ("spi_generic", Some("SPI")),
-        "analog" => ("analog_generic", None),
-        "digital" => ("digital_generic", None),
-        _ => ("unsupported", None),
+    match sensor_id {
+        "dht11" => ("dht11_bitbang", None),
+        "sw420" | "generic-digital-input" => ("digital_gpio", None),
+        "flow-sensor" | "speed-sensor" | "rpm-sensor" => ("pulse_input", None),
+        "distance-sensor" => ("ultrasonic_trigger_echo", None),
+        "current-sensor" | "voltage-sensor" | "pressure-sensor" | "load-sensor" | "generic-analog-input" => ("analog_input", None),
+        _ => match protocol {
+            "I2C" => ("i2c_generic", Some("Wire")),
+            "UART" => ("uart_generic", None),
+            "SPI" => ("spi_generic", Some("SPI")),
+            "analog" => ("analog_input", None),
+            "digital" => ("digital_gpio", None),
+            "pulse" => ("pulse_input", None),
+            _ => ("unsupported", None),
+        },
     }
 }
 
