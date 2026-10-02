@@ -33,9 +33,16 @@ pub fn validate_configuration(request: &ConfigurationRequest) -> CompatibilityRe
         if !sensor.buses.iter().any(|bus| board.buses.contains(bus)) { errors.push(format!("Sensor {} has no compatible bus on {}", sensor.name, board.name)); }
         if selection.parameter_ids.is_empty() { warnings.push(format!("No parameters selected for {}", sensor.name)); continue; }
 
-        let selected_parameters = selection.parameter_ids.iter()
-            .filter_map(|id| sensor.parameters.iter().find(|p| p.id == id))
-            .collect::<Vec<_>>();
+        let mut selected_parameters = Vec::new();
+        for parameter_id in &selection.parameter_ids {
+            match sensor.parameters.iter().find(|p| p.id == parameter_id) {
+                Some(parameter) => selected_parameters.push(parameter),
+                None => errors.push(format!("Unknown parameter {} on {}", parameter_id, sensor.name)),
+            }
+        }
+        if selected_parameters.is_empty() && !selection.parameter_ids.is_empty() {
+            continue;
+        }
         for parameter in &selected_parameters {
             if !machine_signals.contains(parameter.signal_type) {
                 warnings.push(format!("{} is not a declared signal for machine type {}", parameter.name, machine.name));
