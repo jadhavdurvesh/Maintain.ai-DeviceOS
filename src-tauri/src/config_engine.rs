@@ -24,10 +24,18 @@ pub fn validate_configuration(request: &ConfigurationRequest) -> CompatibilityRe
         return CompatibilityResult { valid:false, errors, warnings, assignments };
     };
     let machine_signals: HashSet<&str> = machine.signal_ids.iter().copied().collect();
+    if request.sensors.is_empty() {
+        errors.push("Select at least one sensor before building a device.".into());
+    }
+    let mut seen_sensors: HashSet<&str> = HashSet::new();
     let mut used_digital: HashSet<u8> = HashSet::new();
     let mut used_analog: HashSet<u8> = HashSet::new();
 
     for selection in &request.sensors {
+        if !seen_sensors.insert(selection.sensor_id.as_str()) {
+            errors.push(format!("Sensor {} is selected more than once.", selection.sensor_id));
+            continue;
+        }
         let sensor = sensors().into_iter().find(|s| s.id == selection.sensor_id);
         let Some(sensor) = sensor else { errors.push(format!("Unknown sensor: {}", selection.sensor_id)); continue; };
         if !sensor.buses.iter().any(|bus| board.buses.contains(bus)) { errors.push(format!("Sensor {} has no compatible bus on {}", sensor.name, board.name)); }
