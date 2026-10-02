@@ -50,10 +50,16 @@ fn verify_after_upload(port: &str) -> Result<(), String> {
                 let text = line.trim();
                 if text == "MAINTAIN_AI_SENSOR_NODE_READY" { ready_seen = true; continue; }
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(text) {
-                    if value.get("reading_type").and_then(|v| v.as_str()).is_some()
-                        && value.get("value").and_then(|v| v.as_f64()).is_some() {
-                        telemetry_seen = true;
-                    }
+                    let protocol_ok = value.get("protocol").and_then(|v| v.as_str()) == Some("maintain-ai-telemetry")
+                        && value.get("protocol_version").and_then(|v| v.as_str()) == Some("1.0");
+                    let readings_ok = value.get("readings").and_then(|v| v.as_array()).map(|items| {
+                        items.iter().any(|item| {
+                            item.get("sensor_id").and_then(|v| v.as_str()).is_some()
+                                && item.get("parameter_id").and_then(|v| v.as_str()).is_some()
+                                && item.get("value").and_then(|v| v.as_f64()).is_some()
+                        })
+                    }).unwrap_or(false);
+                    if protocol_ok && readings_ok { telemetry_seen = true; }
                 }
                 if ready_seen && telemetry_seen { return Ok(()); }
             }
