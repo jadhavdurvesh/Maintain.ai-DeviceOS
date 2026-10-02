@@ -16,7 +16,7 @@ pub fn generate(config: &DeviceConfiguration) -> Result<GatewayFirmware, String>
         let parameter=sensor.parameters.iter().find(|p| p.id==a.parameter_id).ok_or_else(|| format!("Unknown parameter: {}",a.parameter_id))?;
         let key=identifier(&format!("{}_{}",a.sensor_id,a.parameter_id));
         let pin=if a.pin_type=="analog" {format!("A{}",a.pin.saturating_sub(14))} else {a.pin.to_string()};
-        if sensor.id=="dht11" { if dht.insert(sensor.id.clone()) { declarations.push_str(&format!("const uint8_t PIN_DHT11_DATA = {};\nfloat dht11_temperature=NAN; float dht11_humidity=NAN;\n",pin)); } }
+        if sensor.id=="dht11" { if dht.insert(sensor.id) { declarations.push_str(&format!("const uint8_t PIN_DHT11_DATA = {};\nfloat dht11_temperature=NAN; float dht11_humidity=NAN;\n",pin)); } }
         else { declarations.push_str(&format!("const uint8_t PIN_{} = {};\n",key,pin)); setup.push_str(&format!("  pinMode(PIN_{}, INPUT);\n",key)); let expr=if a.pin_type=="analog" {format!("analogRead(PIN_{})",key)} else {format!("digitalRead(PIN_{})",key)}; readings.push_str(&format!("  emitReading(\"{}\",\"{}\",(double)({}),\"{}\");\n",escape(sensor.id),escape(parameter.id),expr,escape(parameter.unit))); }
     }
     let dht_code=if dht.is_empty(){String::new()}else{r#"
