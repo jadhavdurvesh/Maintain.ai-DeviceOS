@@ -5,6 +5,7 @@ use crate::{config_store::DeviceConfiguration, gateway_firmware};
 const CLI_VERSION: &str = "1.5.1";
 const WINDOWS_CLI_URL: &str = "https://downloads.arduino.cc/arduino-cli/arduino-cli_1.5.1_Windows_64bit.zip";
 const WINDOWS_CLI_SHA256: &str = "FABE42E0EB04D00E776A66178299FF95A46C623DBC260F997E58FD514853DD40";
+const ESP32_CORE_INDEX: &str = "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolchainStatus { pub installed: bool, pub executable: Option<String>, pub version: Option<String>, pub message: String }
@@ -108,9 +109,24 @@ pub fn compile(config: &DeviceConfiguration) -> Result<BuildResult, String> {
     let output_dir = root.join("build");
     fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
-    let core = Command::new(&cli).args(["core","install","arduino:avr"]).output().map_err(|e|format!("Could not prepare Arduino AVR board support: {e}"))?;
-    if !core.status.success() {
-        return Err(format!("Arduino AVR board support could not be installed. {}", String::from_utf8_lossy(&core.stderr).trim()));
+    let core_id = if fw.fqbn.starts_with("esp32:") { "esp32:esp32" } else { "arduino:avr" };
+    if core_id == "esp32:esp32" {
+        let index = Command::new(&cli).args(["core","update-index","--additional-urls",ESP32_CORE_INDEX]).output()
+            .map_err(|e| format!("Could not update ESP32 board index: {e}"))?;
+        if !index.status.success() {
+            return Err(format!("ESP32 board index could not be updated. {}", String::from_utf8_lossy(&index.stderr).trim()));
+        }
+        let core = Command::new(&cli).args(["core","install",core_id,"--additional-urls",ESP32_CORE_INDEX]).output()
+            .map_err(|e|format!("Could not prepare ESP32 board support: {e}"))?;
+        if !core.status.success() {
+            return Err(format!("ESP32 board support could not be installed. {}", String::from_utf8_lossy(&core.stderr).trim()));
+        }
+    } else {
+        let core = Command::new(&cli).args(["core","install",core_id]).output()
+            .map_err(|e|format!("Could not prepare Arduino AVR board support: {e}"))?;
+        if !core.status.success() {
+            return Err(format!("Arduino AVR board support could not be installed. {}", String::from_utf8_lossy(&core.stderr).trim()));
+        }
     }
 
     let output = Command::new(&cli)
