@@ -28,18 +28,21 @@ fn managed_cli_path() -> Option<String> {
 fn find_cli() -> Option<String> {
     if let Some(p) = managed_cli_path() { if command_works(&p) { return Some(p); } }
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
-    if cfg!(target_os = "windows") {
+    #[cfg(target_os = "windows")]
+    {
         candidates.push(std::path::PathBuf::from("arduino-cli.exe"));
         candidates.push(std::path::PathBuf::from("arduino-cli"));
         if let Ok(root) = std::env::var("PROGRAMFILES") {
             candidates.push(std::path::PathBuf::from(root).join("Arduino CLI").join("arduino-cli.exe"));
         }
         if let Ok(root) = std::env::var("USERPROFILE") {
-            candidates.push(std::path::PathBuf::from(root).join("scoop").join("shims").join("arduino-cli.exe"));
-            candidates.push(std::path::PathBuf::from(root).join("bin").join("arduino-cli.exe"));
+            candidates.push(std::path::PathBuf::from(&root).join("scoop").join("shims").join("arduino-cli.exe"));
+            candidates.push(std::path::PathBuf::from(&root).join("bin").join("arduino-cli.exe"));
         }
         candidates.push(std::path::PathBuf::from(r"C:ProgramDatachocolateyinarduino-cli.exe"));
-    } else {
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
         candidates.push(std::path::PathBuf::from("arduino-cli"));
         candidates.push(std::path::PathBuf::from("/usr/local/bin/arduino-cli"));
         candidates.push(std::path::PathBuf::from("/usr/bin/arduino-cli"));
@@ -65,7 +68,7 @@ pub fn status() -> ToolchainStatus {
     }
 }
 
-pub fn ensure_cli(app: &tauri::AppHandle) -> Result<String, String> {
+pub fn ensure_cli() -> Result<String, String> {
     if let Some(cli)=find_cli() { return Ok(cli); }
     #[cfg(target_os = "windows")]
     {
@@ -95,8 +98,8 @@ pub fn ensure_cli(app: &tauri::AppHandle) -> Result<String, String> {
 
 fn stamp() -> String { SystemTime::now().duration_since(UNIX_EPOCH).map(|d|d.as_millis().to_string()).unwrap_or_else(|_| "0".into()) }
 
-pub fn compile(app: &tauri::AppHandle, config: &DeviceConfiguration) -> Result<BuildResult, String> {
-    let cli = ensure_cli(app)?;
+pub fn compile(config: &DeviceConfiguration) -> Result<BuildResult, String> {
+    let cli = ensure_cli()?;
     let fw = gateway_firmware::generate(config)?;
     let root = std::env::temp_dir().join(format!("maintain-ai-deviceos-{}", stamp()));
     let sketch_dir = root.join("gateway_firmware");
