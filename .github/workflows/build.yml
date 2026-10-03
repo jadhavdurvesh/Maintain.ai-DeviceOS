@@ -88,6 +88,7 @@ jobs:
         run: |
           $installer = Get-ChildItem -Path windows-development -Filter *.exe | Select-Object -First 1
           if (-not $installer) { throw 'Windows installer was not produced.' }
+          New-Item -ItemType Directory -Force -Path windows-development-payload | Out-Null
           $bytes = [System.IO.File]::ReadAllBytes($installer.FullName)
           [Convert]::ToBase64String($bytes) | Out-File -Encoding ascii "windows-development-payload/$($installer.Name).base64.txt"
           Copy-Item windows-development\SHA256SUMS.txt windows-development-payload\SHA256SUMS.txt -Force
