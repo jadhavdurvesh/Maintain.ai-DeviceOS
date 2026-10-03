@@ -23,7 +23,7 @@ pub fn validate_configuration(request: config_engine::ConfigurationRequest) -> c
 #[tauri::command]
 pub fn save_configuration(path:String,config:config_store::DeviceConfiguration)->Result<String,String>{let c=db::open_database(&path).map_err(|e|e.to_string())?;config_store::save_configuration(&c,&config).map_err(|e|e.to_string())}
 #[tauri::command]
-pub fn save_active_configuration(app: tauri::AppHandle, config: config_store::DeviceConfiguration)->Result<String,String>{let dir=app.path().app_data_dir().map_err(|e|e.to_string())?;std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;let path=dir.join("deviceos.db");let c=db::open_database(path.to_str().ok_or_else(||"Invalid database path".to_string())?).map_err(|e|e.to_string())?;config_store::save_configuration(&c,&config).map_err(|e|e.to_string())}
+pub fn save_active_configuration(app: tauri::AppHandle, config: config_store::DeviceConfiguration)->Result<String,String>{let dir=app.path().app_data_dir().map_err(|e|e.to_string())?;std::fs::create_dir_all(&dir).map_err(|e|e.to_string())?;let path=dir.join("deviceos.db");let c=db::open_database(path.to_str().ok_or_else(||"Invalid database path".to_string())?).map_err(|e|e.to_string())?;let mut stored=config.clone();stored.wifi_password=None;stored.device_key=None;config_store::save_configuration(&c,&stored).map_err(|e|e.to_string())}
 #[tauri::command]
 pub fn load_configuration(path:String,id:String)->Result<config_store::DeviceConfiguration,String>{let c=db::open_database(&path).map_err(|e|e.to_string())?;config_store::load_configuration(&c,&id).map_err(|e|e.to_string())}
 #[tauri::command]
