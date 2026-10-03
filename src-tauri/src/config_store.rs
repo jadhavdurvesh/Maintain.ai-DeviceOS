@@ -12,6 +12,10 @@ pub const CONFIG_SCHEMA_VERSION: &str = "1.0";
 pub struct DeviceConfiguration {
     pub id: String,
     pub device_id: Option<String>,
+    #[serde(default)] pub wifi_ssid: Option<String>,
+    #[serde(default)] pub wifi_password: Option<String>,
+    #[serde(default)] pub api_base_url: Option<String>,
+    #[serde(default)] pub device_key: Option<String>,
     pub machine_type_id: String,
     pub board_id: String,
     pub sensors: Vec<crate::config_engine::SensorSelection>,
@@ -55,6 +59,10 @@ pub fn request_to_configuration(request: ConfigurationRequest, assignments: Vec<
     DeviceConfiguration {
         id: String::new(),
         device_id: None,
+        wifi_ssid: None,
+        wifi_password: None,
+        api_base_url: None,
+        device_key: None,
         machine_type_id: request.machine_type_id,
         board_id: request.board_id,
         sensors: request.sensors,
