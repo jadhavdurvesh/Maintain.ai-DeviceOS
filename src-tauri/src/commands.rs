@@ -53,9 +53,9 @@ pub fn initialize_database(path:String)->Result<(),String>{db::open_database(&pa
 #[tauri::command]
 pub fn arduino_cli_status()->arduino_toolchain::ToolchainStatus{arduino_toolchain::status()}
 #[tauri::command]
-pub fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&config)}
+pub fn compile_gateway_firmware(app: tauri::AppHandle, config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&app,&config)}
 #[tauri::command]
-pub fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect()}
+pub fn detect_arduino_boards(app: tauri::AppHandle)->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect(&app)}
 #[tauri::command]
 pub fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{arduino_upload::upload(port,fqbn,build_dir)}
 #[tauri::command]
