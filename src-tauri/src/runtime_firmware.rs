@@ -50,7 +50,7 @@ pub fn generate(config: &DeviceConfiguration) -> Result<RuntimeFirmware, String>
 
 {decl}
 const char* DEVICE_ID = nullptr;
-uint64_t sequenceNumber = 0;
+uint32_t sequenceNumber = 0;
 
 void emitReading(const char* sensorId, const char* parameterId, double value, const char* unit) {{
   Serial.print("{{\"sensor_id\":\""); Serial.print(sensorId);
