@@ -163,6 +163,24 @@ pub fn compile(config: &DeviceConfiguration) -> Result<BuildResult, String> {
     fs::write(&source_file, fw.source).map_err(|e| e.to_string())?;
     let output_dir = root.join("build");
     fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
+    // Install the board platform required by the generated FQBN if it is not
+    // already present. This makes a fresh DeviceOS installation usable without
+    // asking the user to separately manage Arduino CLI packages.
+    let package = fw.fqbn.split(':').take(2).collect::<Vec<_>>().join(":");
+    if !package.is_empty() {
+        let core = format!("{}:avr", package.split(':').next().unwrap_or("arduino"));
+        let core = if fw.fqbn.starts_with("arduino:avr:") { "arduino:avr".to_string() } else { package };
+        let installed = Command::new(&cli)
+            .args(["core", "install", core.as_str()])
+            .output()
+            .map_err(|e| format!("Could not install the Arduino board package: {e}"))?;
+        if !installed.status.success() {
+            return Err(format!(
+                "Arduino board package installation failed.\n{}",
+                String::from_utf8_lossy(&installed.stderr)
+            ));
+        }
+    }
     let output = Command::new(&cli)
         .args(["compile", "--fqbn", fw.fqbn.as_str(), "--output-dir", output_dir.to_string_lossy().as_ref(), sketch_dir.to_string_lossy().as_ref()])
         .output().map_err(|e| format!("Could not run Arduino CLI: {e}"))?;
