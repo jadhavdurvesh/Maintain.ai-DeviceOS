@@ -53,7 +53,7 @@ pub fn initialize_database(path:String)->Result<(),String>{db::open_database(&pa
 #[tauri::command]
 pub fn arduino_cli_status()->arduino_toolchain::ToolchainStatus{arduino_toolchain::status()}
 #[tauri::command]
-pub fn compile_gateway_firmware(app: tauri::AppHandle, config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&app,&config)}
+pub fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&config)}
 #[tauri::command]
 pub fn detect_arduino_boards(app: tauri::AppHandle)->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect(&app)}
 #[tauri::command]
