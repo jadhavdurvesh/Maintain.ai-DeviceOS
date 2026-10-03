@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, process::Command, time::{SystemTime, UNIX_EPOCH}};
-use tauri::Manager;
 use crate::{config_store::DeviceConfiguration, gateway_firmware};
 
 const CLI_VERSION: &str = "1.5.1";
@@ -70,7 +69,9 @@ pub fn ensure_cli(app: &tauri::AppHandle) -> Result<String, String> {
     if let Some(cli)=find_cli() { return Ok(cli); }
     #[cfg(target_os = "windows")]
     {
-        let root=app.path().app_data_dir().map_err(|e|e.to_string())?.join("toolchain");
+        let root=std::env::var("LOCALAPPDATA").map(std::path::PathBuf::from)
+            .map(|p| p.join("Maintain.ai").join("DeviceOS").join("toolchain"))
+            .map_err(|_| "LOCALAPPDATA is unavailable; DeviceOS cannot choose a managed toolchain location.".to_string())?;
         fs::create_dir_all(&root).map_err(|e|e.to_string())?;
         let archive=root.join("arduino-cli.zip");
         let exe=root.join("arduino-cli.exe");
