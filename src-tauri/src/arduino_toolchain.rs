@@ -91,7 +91,6 @@ pub fn ensure_cli() -> Result<String, String> {
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _=app;
         Err("Arduino CLI is not installed. Install the official Arduino CLI and run Scan USB again.".into())
     }
 }
