@@ -55,7 +55,7 @@ pub fn arduino_cli_status()->arduino_toolchain::ToolchainStatus{arduino_toolchai
 #[tauri::command]
 pub fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&config)}
 #[tauri::command]
-pub fn detect_arduino_boards(app: tauri::AppHandle)->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect(&app)}
+pub fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect()}
 #[tauri::command]
 pub fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{arduino_upload::upload(port,fqbn,build_dir)}
 #[tauri::command]
