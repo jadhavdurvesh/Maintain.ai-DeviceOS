@@ -39,7 +39,7 @@ fn find_cli() -> Option<String> {
             candidates.push(std::path::PathBuf::from(&root).join("scoop").join("shims").join("arduino-cli.exe"));
             candidates.push(std::path::PathBuf::from(&root).join("bin").join("arduino-cli.exe"));
         }
-        candidates.push(std::path::PathBuf::from(r"C:ProgramDatachocolateyinarduino-cli.exe"));
+        candidates.push(std::path::PathBuf::from(r"C:\ProgramData\chocolatey\bin\arduino-cli.exe"));
     }
     #[cfg(not(target_os = "windows"))]
     {
