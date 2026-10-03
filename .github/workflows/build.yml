@@ -82,6 +82,26 @@ jobs:
             "$($_.Hash)  $($installer.Name)"
           } | Out-File -Encoding ascii windows-development\SHA256SUMS.txt
 
+      - name: Create unsigned Windows payload fallback
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: |
+          $installer = Get-ChildItem -Path windows-development -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer was not produced.' }
+          $bytes = [System.IO.File]::ReadAllBytes($installer.FullName)
+          [Convert]::ToBase64String($bytes) | Out-File -Encoding ascii "windows-development-payload/$($installer.Name).base64.txt"
+          Copy-Item windows-development\SHA256SUMS.txt windows-development-payload\SHA256SUMS.txt -Force
+
+      - name: Upload unsigned Windows payload fallback
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: maintain-ai-deviceos-windows-development-payload
+          path: windows-development-payload
+          if-no-files-found: error
+          retention-days: 7
+          archive: true
+
       - name: Upload unsigned Windows development package
         if: matrix.platform == 'windows'
         id: upload-unsigned-windows
