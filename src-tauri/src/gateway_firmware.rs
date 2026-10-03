@@ -116,7 +116,7 @@ bool readDht11(uint8_t pin, float &temperature, float &humidity) {
 
 {declarations}
 const char* DEVICE_ID={device};
-uint64_t sequenceNumber=0;
+uint32_t sequenceNumber=0;
 uint8_t emittedReadings=0;
 
 void emitReading(const char* sensorId,const char* parameterId,double value,const char* unit) {{
