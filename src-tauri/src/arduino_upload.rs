@@ -24,8 +24,8 @@ pub fn detect() -> Result<Vec<DetectedBoard>, String> {
         let mut parts=line.split_whitespace();
         let address=match parts.next(){Some(v)=>v.to_string(),None=>continue};
         let protocol=parts.next().unwrap_or("serial").to_string();
-        let board_name=line.split("Arduino").nth(1).map(|s|format!("Arduino{}",s.trim()));
-        let fqbn=line.split("arduino:").find_map(|s|s.split_whitespace().next()).map(|s|format!("arduino:{s}"));
+        let fqbn=parts.find(|token| token.starts_with("arduino:")).map(|token| token.trim_matches(|c:char| c==',' || c==')').to_string());
+        let board_name=fqbn.as_ref().and_then(|id| crate::registry::boards().into_iter().find(|b| b.fqbn==id).map(|b| b.name.to_string()));
         boards.push(DetectedBoard{address,port_type:"serial".into(),protocol,board_name,fqbn,serial_number:None});
     }
     Ok(boards)
