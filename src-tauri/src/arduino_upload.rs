@@ -13,8 +13,8 @@ pub struct UploadResult { pub success: bool, pub port: String, pub fqbn: String,
 
 fn cli() -> Result<String, String> { arduino_toolchain::status().executable.ok_or_else(|| "Arduino CLI was not found. Install Arduino CLI and restart DeviceOS.".into()) }
 
-pub fn detect(app: &tauri::AppHandle) -> Result<Vec<DetectedBoard>, String> {
-    let cli = arduino_toolchain::ensure_cli(app)?;
+pub fn detect() -> Result<Vec<DetectedBoard>, String> {
+    let cli = arduino_toolchain::ensure_cli()?;
     let out = Command::new(cli).args(["board", "list"]).output().map_err(|e| format!("Could not run Arduino CLI: {e}"))?;
     if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).to_string()); }
     let text = String::from_utf8_lossy(&out.stdout);
