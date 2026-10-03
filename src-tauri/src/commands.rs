@@ -53,10 +53,10 @@ pub fn initialize_database(path:String)->Result<(),String>{db::open_database(&pa
 #[tauri::command]
 pub fn arduino_cli_status()->arduino_toolchain::ToolchainStatus{arduino_toolchain::status()}
 #[tauri::command]
-pub fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{arduino_toolchain::compile(&config)}
+pub async fn compile_gateway_firmware(config:config_store::DeviceConfiguration)->Result<arduino_toolchain::BuildResult,String>{tauri::async_runtime::spawn_blocking(move || arduino_toolchain::compile(&config)).await.map_err(|e|format!("Firmware build task failed: {e}"))?}
 #[tauri::command]
-pub fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{arduino_upload::detect()}
+pub async fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{tauri::async_runtime::spawn_blocking(arduino_upload::detect).await.map_err(|e|format!("Arduino detection task failed: {e}"))?}
 #[tauri::command]
-pub fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{arduino_upload::upload(port,fqbn,build_dir)}
+pub async fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{tauri::async_runtime::spawn_blocking(move || arduino_upload::upload(port,fqbn,build_dir)).await.map_err(|e|format!("Firmware upload task failed: {e}"))?}
 #[tauri::command]
 pub fn verify_uploaded_device(config:config_store::DeviceConfiguration,port:String,baud_rate:u32,timeout_ms:u64)->Result<device_verification::VerificationResult,String>{device_verification::verify(&config,port,baud_rate,timeout_ms)}
