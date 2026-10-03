@@ -70,16 +70,28 @@ jobs:
       - name: Build and package Tauri application
         run: npm exec tauri build -- --bundles "${{ matrix.bundles }}"
 
-      - name: Upload unsigned Windows installer
+      - name: Package unsigned Windows installer for development
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: |
+          $installer = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer was not produced.' }
+          New-Item -ItemType Directory -Force -Path windows-development | Out-Null
+          Copy-Item $installer.FullName windows-development\
+          Get-FileHash $installer.FullName -Algorithm SHA256 | ForEach-Object {
+            "$($_.Hash)  $($installer.Name)"
+          } | Out-File -Encoding ascii windows-development\SHA256SUMS.txt
+
+      - name: Upload unsigned Windows development package
         if: matrix.platform == 'windows'
         id: upload-unsigned-windows
         uses: actions/upload-artifact@v7
         with:
-          name: maintain-ai-deviceos-windows-unsigned-development
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          name: maintain-ai-deviceos-windows-development
+          path: windows-development
           if-no-files-found: error
           retention-days: 7
-          archive: false
+          archive: true
 
       - name: Sign Windows installer with SignPath
         if: matrix.platform == 'windows' && vars.SIGNPATH_ORGANIZATION_ID != ''
