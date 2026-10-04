@@ -214,7 +214,7 @@ void loop() {{
 #include <math.h>
 
 {declarations}
-const char* DEVICE_ID={device};
+{dht_declaration}const char* DEVICE_ID={device};
 uint32_t sequenceNumber=0;
 uint8_t emittedReadings=0;
 
@@ -236,6 +236,7 @@ void emitReading(const char* sensorId,const char* parameterId,double value,const
 
 void emitFrame() {{
   emittedReadings=0;
+  {dht_call}
   Serial.print("{{\"protocol\":\"maintain-ai-telemetry\",\"protocol_version\":\"1.0\",\"device_id\":");
   if(DEVICE_ID==nullptr) Serial.print("null"); else {{Serial.print("\"");Serial.print(DEVICE_ID);Serial.print("\"");}}
   Serial.print(",\"configuration_id\":\"{config}\",\"sequence\":");
