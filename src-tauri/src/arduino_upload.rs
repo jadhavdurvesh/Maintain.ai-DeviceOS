@@ -74,13 +74,30 @@ fn verify_after_upload(port: &str) -> Result<(), String> {
 
 pub fn upload(port:String, fqbn:String, build_dir:String) -> Result<UploadResult,String> {
     let cli=cli()?;
-    let out=Command::new(&cli).args(["upload","-p",port.as_str(),"--fqbn",fqbn.as_str(),"--input-dir",build_dir.as_str()]).output().map_err(|e|format!("Could not run Arduino CLI upload: {e}"))?;
-    let stdout=String::from_utf8_lossy(&out.stdout).into();
-    let stderr=String::from_utf8_lossy(&out.stderr).into();
-    if !out.status.success() {
-        return Ok(UploadResult{success:false,port,fqbn,stdout,stderr,message:"Firmware upload failed. Review the compiler/upload output for details.".into()});
+    let mut all_stdout=String::new();
+    let mut all_stderr=String::new();
+    let mut last_failure=None;
+    for attempt in 1..=3 {
+        let out=Command::new(&cli)
+            .args(["upload","-p",port.as_str(),"--fqbn",fqbn.as_str(),"--input-dir",build_dir.as_str()])
+            .output()
+            .map_err(|e|format!("Could not run Arduino CLI upload: {e}"))?;
+        let stdout=String::from_utf8_lossy(&out.stdout).into_owned();
+        let stderr=String::from_utf8_lossy(&out.stderr).into_owned();
+        all_stdout.push_str(&format!("Attempt {attempt}/3\n{stdout}\n"));
+        all_stderr.push_str(&format!("Attempt {attempt}/3\n{stderr}\n"));
+        if out.status.success() {
+            match verify_after_upload(&port) {
+                Ok(()) => return Ok(UploadResult{success:true,port,fqbn:fqbn.clone(),stdout:all_stdout,stderr:all_stderr,message:if fqbn.starts_with("esp32:") { "Firmware uploaded and verified. ESP32 is ready for direct Wi-Fi telemetry to Maintain.ai.".into() } else { "Firmware uploaded and verified. Controller is ready for MAINTAIN-AI-IoT-Gateway.".into() }}),
+                Err(message) => last_failure=Some(message),
+            }
+        } else {
+            last_failure=Some(format!("Arduino CLI upload failed on attempt {attempt}. {}", if stderr.trim().is_empty() { stdout.trim() } else { stderr.trim() }));
+        }
+        sleep(Duration::from_millis(800));
     }
-    match verify_after_upload(&port) {
+    Ok(UploadResult{success:false,port,fqbn,stdout:all_stdout,stderr:all_stderr,message:last_failure.unwrap_or_else(||"Firmware upload failed after 3 attempts.".into())})
+}
         Ok(()) => Ok(UploadResult{success:true,port,fqbn:fqbn.clone(),stdout,stderr,message:if fqbn.starts_with("esp32:") { "Firmware uploaded and verified. ESP32 is ready for direct Wi-Fi telemetry to Maintain.ai.".into() } else { "Firmware uploaded and verified. Controller is ready for MAINTAIN-AI-IoT-Gateway.".into() }}),
         Err(message) => Ok(UploadResult{success:false,port,fqbn,stdout,stderr,message}),
     }
