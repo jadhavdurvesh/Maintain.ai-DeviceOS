@@ -81,7 +81,7 @@ pub fn upload(port:String, fqbn:String, build_dir:String) -> Result<UploadResult
         return Ok(UploadResult{success:false,port,fqbn,stdout,stderr,message:"Firmware upload failed. Review the compiler/upload output for details.".into()});
     }
     match verify_after_upload(&port) {
-        Ok(()) => Ok(UploadResult{success:true,port,fqbn,stdout,stderr,message:if fqbn.starts_with("esp32:") { "Firmware uploaded and verified. ESP32 is ready for direct Wi-Fi telemetry to Maintain.ai.".into() } else { "Firmware uploaded and verified. Controller is ready for MAINTAIN-AI-IoT-Gateway.".into() }}),
+        Ok(()) => Ok(UploadResult{success:true,port,fqbn:fqbn.clone(),stdout,stderr,message:if fqbn.starts_with("esp32:") { "Firmware uploaded and verified. ESP32 is ready for direct Wi-Fi telemetry to Maintain.ai.".into() } else { "Firmware uploaded and verified. Controller is ready for MAINTAIN-AI-IoT-Gateway.".into() }}),
         Err(message) => Ok(UploadResult{success:false,port,fqbn,stdout,stderr,message}),
     }
 }
