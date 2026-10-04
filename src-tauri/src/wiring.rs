@@ -14,6 +14,8 @@ pub struct WiringConnection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+fn pin_label(board_id: &str, pin: u8, pin_type: &str) -> String { if pin_type == "analog" { if board_id == "esp32-devkit-v1" { format!("GPIO {}", pin) } else { format!("A{}", pin.saturating_sub(14)) } } else { format!("D{}", pin) } }
+
 pub struct WiringSpecification {
     pub configuration_id: String,
     pub board_id: String,
@@ -34,8 +36,8 @@ pub fn generate_wiring(config: &DeviceConfiguration) -> Result<WiringSpecificati
         let parameter = sensor.parameters.iter().find(|p| p.id == assignment.parameter_id)
             .ok_or_else(|| format!("Parameter {} not found on {}", assignment.parameter_id, sensor.name))?;
         let notes = match assignment.pin_type.as_str() {
-            "analog" => format!("Connect {} output to A{}; verify sensor reference voltage and conditioning.", sensor.name, assignment.pin.saturating_sub(14)),
-            "digital" => format!("Connect {} signal to D{}; configure pull-up/pull-down as required by the sensor.", sensor.name, assignment.pin),
+            "analog" => format!("Connect {} output to {}; verify sensor reference voltage and conditioning.", sensor.name, pin_label(board.id, assignment.pin, "analog")),
+            "digital" => format!("Connect {} signal to {}; configure pull-up/pull-down as required by the sensor.", sensor.name, pin_label(board.id, assignment.pin, "digital")),
             other => format!("Pin type {} requires a board-specific wiring profile.", other),
         };
         connections.push(WiringConnection {
