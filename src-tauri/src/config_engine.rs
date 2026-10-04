@@ -30,6 +30,13 @@ pub fn validate_configuration(request: &ConfigurationRequest) -> CompatibilityRe
     let mut seen_sensors: HashSet<&str> = HashSet::new();
     let mut used_digital: HashSet<u8> = HashSet::new();
     let mut used_analog: HashSet<u8> = HashSet::new();
+    // DeviceOS uses the hardware serial port for provisioning/telemetry verification.
+    // Reserve AVR D0/D1 so sensor allocations can never steal RX/TX.
+    if board.id == "arduino-uno-r3" || board.id == "arduino-nano" {
+        used_digital.insert(0);
+        used_digital.insert(1);
+        warnings.push("Arduino D0/D1 are reserved for USB serial communication and are not assigned to sensors.".into());
+    }
 
     for selection in &request.sensors {
         if !seen_sensors.insert(selection.sensor_id.as_str()) {
