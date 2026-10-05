@@ -7,6 +7,7 @@ mod db;
 mod device_verification;
 mod firmware;
 mod firmware_generator;
+mod gemini;
 mod gateway_firmware;
 mod machine_registry;
 mod registry;
@@ -48,7 +49,11 @@ pub fn run(){
             commands::compile_gateway_firmware,
             commands::detect_arduino_boards,
             commands::upload_gateway_firmware,
-            commands::verify_uploaded_device
+            commands::verify_uploaded_device,
+            commands::load_gemini_settings,
+            commands::save_gemini_settings,
+            commands::verify_firmware_with_gemini,
+            commands::compile_firmware_source
         ])
         .run(tauri::generate_context!())
         .expect("error while running Maintain.ai DeviceOS");
