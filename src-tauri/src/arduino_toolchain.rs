@@ -11,7 +11,7 @@ const ESP32_CORE_INDEX: &str = "https://raw.githubusercontent.com/espressif/ardu
 pub struct ToolchainStatus { pub installed: bool, pub executable: Option<String>, pub version: Option<String>, pub message: String }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildResult { pub success: bool, pub output_dir: String, pub source_file: String, pub saved_dir: Option<String>, pub stdout: String, pub stderr: String, pub fqbn: String }
+pub struct BuildResult { pub success: bool, pub output_dir: String, pub source_file: String, pub saved_dir: Option<String>, pub source: String, pub stdout: String, pub stderr: String, pub fqbn: String }
 
 fn command_works(path: &str) -> bool { Command::new(path).arg("version").output().map(|o| o.status.success()).unwrap_or(false) }
 
@@ -136,7 +136,7 @@ pub fn compile_source(config: &DeviceConfiguration, source: &str, fqbn: &str) ->
     let output = Command::new(&cli)
         .args(["compile", "--fqbn", fqbn, "--output-dir", output_dir.to_string_lossy().as_ref(), sketch_dir.to_string_lossy().as_ref()])
         .output().map_err(|e| format!("Could not run Arduino CLI: {e}"))?;
-    Ok(BuildResult { success: output.status.success(), output_dir: output_dir.to_string_lossy().into(), source_file: source_file.to_string_lossy().into(), saved_dir: save_firmware_copy(config, &source_file, &output_dir).ok(), stdout: String::from_utf8_lossy(&output.stdout).into(), stderr: String::from_utf8_lossy(&output.stderr).into(), fqbn: fqbn.to_string() })
+    Ok(BuildResult { success: output.status.success(), output_dir: output_dir.to_string_lossy().into(), source_file: source_file.to_string_lossy().into(), saved_dir: save_firmware_copy(config, &source_file, &output_dir).ok(), source: source.to_string(), stdout: String::from_utf8_lossy(&output.stdout).into(), stderr: String::from_utf8_lossy(&output.stderr).into(), fqbn: fqbn.to_string() })
 }
 
 fn documents_dir() -> Option<std::path::PathBuf> {
