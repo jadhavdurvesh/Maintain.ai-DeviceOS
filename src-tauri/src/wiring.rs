@@ -13,9 +13,9 @@ pub struct WiringConnection {
     pub notes: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
 fn pin_label(board_id: &str, pin: u8, pin_type: &str) -> String { if pin_type == "analog" { if board_id == "esp32-devkit-v1" { format!("GPIO {}", pin) } else { format!("A{}", pin.saturating_sub(14)) } } else { format!("D{}", pin) } }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WiringSpecification {
     pub configuration_id: String,
     pub board_id: String,
