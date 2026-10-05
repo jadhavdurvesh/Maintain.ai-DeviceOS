@@ -11,7 +11,7 @@ const ESP32_CORE_INDEX: &str = "https://raw.githubusercontent.com/espressif/ardu
 pub struct ToolchainStatus { pub installed: bool, pub executable: Option<String>, pub version: Option<String>, pub message: String }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildResult { pub success: bool, pub output_dir: String, pub source_file: String, pub stdout: String, pub stderr: String, pub fqbn: String }
+pub struct BuildResult { pub success: bool, pub output_dir: String, pub source_file: String, pub saved_dir: Option<String>, pub stdout: String, pub stderr: String, pub fqbn: String }
 
 fn command_works(path: &str) -> bool { Command::new(path).arg("version").output().map(|o| o.status.success()).unwrap_or(false) }
 
@@ -99,17 +99,21 @@ pub fn ensure_cli() -> Result<String, String> {
 fn stamp() -> String { SystemTime::now().duration_since(UNIX_EPOCH).map(|d|d.as_millis().to_string()).unwrap_or_else(|_| "0".into()) }
 
 pub fn compile(config: &DeviceConfiguration) -> Result<BuildResult, String> {
-    let cli = ensure_cli()?;
     let fw = gateway_firmware::generate(config)?;
+    compile_source(config, &fw.source, &fw.fqbn)
+}
+
+pub fn compile_source(config: &DeviceConfiguration, source: &str, fqbn: &str) -> Result<BuildResult, String> {
+    let cli = ensure_cli()?;
     let root = std::env::temp_dir().join(format!("maintain-ai-deviceos-{}", stamp()));
     let sketch_dir = root.join("gateway_firmware");
     fs::create_dir_all(&sketch_dir).map_err(|e| e.to_string())?;
     let source_file = sketch_dir.join("gateway_firmware.ino");
-    fs::write(&source_file, fw.source).map_err(|e| e.to_string())?;
+    fs::write(&source_file, source).map_err(|e| e.to_string())?;
     let output_dir = root.join("build");
     fs::create_dir_all(&output_dir).map_err(|e| e.to_string())?;
 
-    let core_id = if fw.fqbn.starts_with("esp32:") { "esp32:esp32" } else { "arduino:avr" };
+    let core_id = if fqbn.starts_with("esp32:") { "esp32:esp32" } else { "arduino:avr" };
     if core_id == "esp32:esp32" {
         let index = Command::new(&cli).args(["core","update-index","--additional-urls",ESP32_CORE_INDEX]).output()
             .map_err(|e| format!("Could not update ESP32 board index: {e}"))?;
@@ -130,7 +134,34 @@ pub fn compile(config: &DeviceConfiguration) -> Result<BuildResult, String> {
     }
 
     let output = Command::new(&cli)
-        .args(["compile", "--fqbn", fw.fqbn.as_str(), "--output-dir", output_dir.to_string_lossy().as_ref(), sketch_dir.to_string_lossy().as_ref()])
+        .args(["compile", "--fqbn", fqbn, "--output-dir", output_dir.to_string_lossy().as_ref(), sketch_dir.to_string_lossy().as_ref()])
         .output().map_err(|e| format!("Could not run Arduino CLI: {e}"))?;
-    Ok(BuildResult { success: output.status.success(), output_dir: output_dir.to_string_lossy().into(), source_file: source_file.to_string_lossy().into(), stdout: String::from_utf8_lossy(&output.stdout).into(), stderr: String::from_utf8_lossy(&output.stderr).into(), fqbn: fw.fqbn })
+    Ok(BuildResult { success: output.status.success(), output_dir: output_dir.to_string_lossy().into(), source_file: source_file.to_string_lossy().into(), saved_dir: save_firmware_copy(config, &source_file, &output_dir).ok(), stdout: String::from_utf8_lossy(&output.stdout).into(), stderr: String::from_utf8_lossy(&output.stderr).into(), fqbn: fqbn.to_string() })
+}
+
+fn documents_dir() -> Option<std::path::PathBuf> {
+    #[cfg(target_os = "windows")]
+    if let Ok(user) = std::env::var("USERPROFILE") { return Some(std::path::PathBuf::from(user).join("Documents")); }
+    #[cfg(not(target_os = "windows"))]
+    if let Ok(home) = std::env::var("HOME") { return Some(std::path::PathBuf::from(home).join("Documents")); }
+    None
+}
+
+fn save_firmware_copy(config: &DeviceConfiguration, source_file: &std::path::Path, output_dir: &std::path::Path) -> Result<String, String> {
+    let root = documents_dir().ok_or("Documents folder could not be located")?
+        .join("Maintain.ai").join("DeviceOS").join("Firmware")
+        .join(&config.id);
+    fs::create_dir_all(&root).map_err(|e| e.to_string())?;
+    let source_target = root.join("gateway_firmware.ino");
+    fs::copy(source_file, &source_target).map_err(|e| e.to_string())?;
+    let build_target = root.join("build");
+    if build_target.exists() { fs::remove_dir_all(&build_target).map_err(|e| e.to_string())?; }
+    fs::create_dir_all(&build_target).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(output_dir).map_err(|e| e.to_string())? {
+        let entry=entry.map_err(|e| e.to_string())?;
+        if entry.file_type().map_err(|e| e.to_string())?.is_file() {
+            fs::copy(entry.path(), build_target.join(entry.file_name())).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(root.to_string_lossy().into())
 }
