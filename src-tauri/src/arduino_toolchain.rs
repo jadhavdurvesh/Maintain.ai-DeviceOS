@@ -140,11 +140,7 @@ pub fn compile_source(config: &DeviceConfiguration, source: &str, fqbn: &str) ->
 }
 
 fn documents_dir() -> Option<std::path::PathBuf> {
-    #[cfg(target_os = "windows")]
-    if let Ok(user) = std::env::var("USERPROFILE") { return Some(std::path::PathBuf::from(user).join("Documents")); }
-    #[cfg(not(target_os = "windows"))]
-    if let Ok(home) = std::env::var("HOME") { return Some(std::path::PathBuf::from(home).join("Documents")); }
-    None
+    dirs::document_dir()
 }
 
 fn save_firmware_copy(config: &DeviceConfiguration, source_file: &std::path::Path, output_dir: &std::path::Path) -> Result<String, String> {
