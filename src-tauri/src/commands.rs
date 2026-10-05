@@ -57,6 +57,14 @@ pub async fn compile_gateway_firmware(config:config_store::DeviceConfiguration)-
 #[tauri::command]
 pub async fn detect_arduino_boards()->Result<Vec<arduino_upload::DetectedBoard>,String>{tauri::async_runtime::spawn_blocking(arduino_upload::detect).await.map_err(|e|format!("Arduino detection task failed: {e}"))?}
 #[tauri::command]
+pub fn load_gemini_settings() -> Result<crate::gemini::GeminiSettings,String> { crate::gemini::load_settings() }
+#[tauri::command]
+pub fn save_gemini_settings(settings: crate::gemini::GeminiSettings) -> Result<(),String> { crate::gemini::save_settings(settings) }
+#[tauri::command]
+pub async fn verify_firmware_with_gemini(config: config_store::DeviceConfiguration, source: String) -> Result<crate::gemini::GeminiVerification,String> { tauri::async_runtime::spawn_blocking(move || crate::gemini::verify(&source,&config)).await.map_err(|e|format!("Gemini verification task failed: {e}"))? }
+#[tauri::command]
+pub async fn compile_firmware_source(config: config_store::DeviceConfiguration, source: String, fqbn: String) -> Result<arduino_toolchain::BuildResult,String> { tauri::async_runtime::spawn_blocking(move || arduino_toolchain::compile_source(&config,&source,&fqbn)).await.map_err(|e|format!("Firmware rebuild task failed: {e}"))? }
+#[tauri::command]
 pub async fn upload_gateway_firmware(port:String,fqbn:String,build_dir:String)->Result<arduino_upload::UploadResult,String>{tauri::async_runtime::spawn_blocking(move || arduino_upload::upload(port,fqbn,build_dir)).await.map_err(|e|format!("Firmware upload task failed: {e}"))?}
 #[tauri::command]
 pub fn verify_uploaded_device(config:config_store::DeviceConfiguration,port:String,baud_rate:u32,timeout_ms:u64)->Result<device_verification::VerificationResult,String>{device_verification::verify(&config,port,baud_rate,timeout_ms)}
