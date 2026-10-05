@@ -32,7 +32,13 @@ fn extract_text(r:GenerateResponse)->Result<String,String>{r.candidates.and_then
 pub fn verify(source:&str,config:&DeviceConfiguration)->Result<GeminiVerification,String>{
     let settings=load_settings()?; if settings.api_key.trim().is_empty(){return Err("Gemini API key is not configured. Open Settings and add your key.".into());}
     let model=if settings.model.trim().is_empty(){default_model()}else{settings.model.trim().to_string()};
-    let prompt=format!("You are the firmware verification engineer for Maintain.ai DeviceOS. Review this generated embedded C++ firmware for the exact device configuration. Return ONLY valid JSON with schema {\\"ok\\":true/false,\\"changed\\":true/false,\\"summary\\":\\"short summary\\",\\"issues\\":[\\"issue\\"],\\"corrected_source\\":\\"complete corrected source or null\\"}. Preserve the Maintain.ai telemetry protocol, configuration identity, and every configured sensor pin. Fix only compile errors, invalid C/C++, invalid JSON generation, obvious sensor read logic bugs, or protocol-breaking mistakes. Do not move sensors, remove required telemetry, or add new secrets. If correct: ok=true, changed=false, corrected_source=null. If correction is needed, corrected_source must be the complete compilable source. machine={} board={} assignments={} firmware={} ",config.machine_type_id,config.board_id,serde_json::to_string(&config.assignments).unwrap_or_default(),source);
+    let wifi_secret=config.wifi_password.clone().unwrap_or_default();
+    let device_secret=config.device_key.clone().unwrap_or_default();
+    let mut ai_source=source.to_string();
+    if !wifi_secret.is_empty(){ai_source=ai_source.replace(&wifi_secret,"<DEVICE_WIFI_PASSWORD>");}
+    if !device_secret.is_empty(){ai_source=ai_source.replace(&device_secret,"<DEVICE_KEY>");}
+    let mut ai_config=config.clone(); ai_config.wifi_password=None; ai_config.device_key=None;
+    let prompt=format!("You are the firmware verification engineer for Maintain.ai DeviceOS. Review this generated embedded C++ firmware for the exact device configuration. Return ONLY valid JSON with schema {\\"ok\\":true/false,\\"changed\\":true/false,\\"summary\\":\\"short summary\\",\\"issues\\":[\\"issue\\"],\\"corrected_source\\":\\"complete corrected source or null\\"}. Preserve the Maintain.ai telemetry protocol, configuration identity, and every configured sensor pin. Fix only compile errors, invalid C/C++, invalid JSON generation, obvious sensor read logic bugs, or protocol-breaking mistakes. Do not move sensors, remove required telemetry, or add new secrets. If correct: ok=true, changed=false, corrected_source=null. If correction is needed, corrected_source must be the complete compilable source. machine={} board={} assignments={} firmware={} ",ai_config.machine_type_id,ai_config.board_id,serde_json::to_string(&ai_config.assignments).unwrap_or_default(),ai_source);
     let body=serde_json::json!({"contents":[{"parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.1,"responseMimeType":"application/json"}});
     let url=format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",model);
     let client=Client::builder().timeout(std::time::Duration::from_secs(60)).build().map_err(|e|format!("Could not initialize Gemini client: {e}"))?;
@@ -40,5 +46,7 @@ pub fn verify(source:&str,config:&DeviceConfiguration)->Result<GeminiVerificatio
     let status=response.status(); let text=response.text().map_err(|e|format!("Could not read Gemini response: {e}"))?;
     if !status.is_success(){return Err(format!("Gemini API returned HTTP {}: {}",status,text));}
     let parsed:GenerateResponse=serde_json::from_str(&text).map_err(|e|format!("Invalid Gemini response: {e}"))?; let output=extract_text(parsed)?; let clean=output.trim().trim_start_matches("```json").trim_end_matches("```").trim();
-    serde_json::from_str::<GeminiVerification>(clean).map_err(|e|format!("Gemini returned invalid verification JSON: {e}"))
+    let mut result:GeminiVerification=serde_json::from_str(clean).map_err(|e|format!("Gemini returned invalid verification JSON: {e}"))?;
+    if let Some(corrected)=result.corrected_source.as_mut(){ if !wifi_secret.is_empty(){*corrected=corrected.replace("<DEVICE_WIFI_PASSWORD>",&wifi_secret);} if !device_secret.is_empty(){*corrected=corrected.replace("<DEVICE_KEY>",&device_secret);} }
+    Ok(result)
 }
